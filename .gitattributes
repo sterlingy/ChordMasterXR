@@ -1,0 +1,38 @@
+# Properly detect languages on Github
+*.h linguist-language=C++
+*.inc linguist-language=C++
+thirdparty/* linguist-vendored
+
+# Normalize EOL for all files that Git considers text files
+* text=auto eol=lf
+# Except for Windows-only / Visual Studio files
+*.bat eol=crlf
+*.sln eol=crlf
+*.csproj eol=crlf
+misc/msvs/* eol=crlf
+# And some test files where the EOL matters
+*.test.txt -text
+
+# Git LFS. filter=lfs is what Godot Git looks for before it offers Lock (Git LFS).
+# lockable is what Git LFS file locking and the LfsLock addon look for.
+# -text keeps Git from rewriting these files; it replaces the old `binary` marker.
+*.icns filter=lfs diff=lfs merge=lfs -text lockable
+*.ico filter=lfs diff=lfs merge=lfs -text lockable
+*.jar filter=lfs diff=lfs merge=lfs -text lockable
+*.zip filter=lfs diff=lfs merge=lfs -text lockable
+*.png filter=lfs diff=lfs merge=lfs -text lockable
+*.jpg filter=lfs diff=lfs merge=lfs -text lockable
+*.jpeg filter=lfs diff=lfs merge=lfs -text lockable
+*.ttf filter=lfs diff=lfs merge=lfs -text lockable
+*.tza filter=lfs diff=lfs merge=lfs -text lockable
+*.blend filter=lfs diff=lfs merge=lfs -text lockable
+*.dll filter=lfs diff=lfs merge=lfs -text lockable
+*.so filter=lfs diff=lfs merge=lfs -text lockable
+*.dylib filter=lfs diff=lfs merge=lfs -text lockable
+*.macos filter=lfs diff=lfs merge=lfs -text lockable
+*.aar filter=lfs diff=lfs merge=lfs -text lockable
+*.gltf filter=lfs diff=lfs merge=lfs -text lockable
+*.glb filter=lfs diff=lfs merge=lfs -text lockable
+*.res filter=lfs diff=lfs merge=lfs -text lockable
+*.shape filter=lfs diff=lfs merge=lfs -text lockable
+*.mind filter=lfs diff=lfs merge=lfs -text lockable
