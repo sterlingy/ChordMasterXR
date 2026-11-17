@@ -1,0 +1,518 @@
+[gd_scene format=3]
+
+[ext_resource type="Theme" path="res://ui/theme.tres" id="1_j5jdn"]
+[ext_resource type="Script" path="res://scripts/ui/practice_screen.gd" id="2_3743t"]
+[ext_resource type="Script" path="res://scripts/practice_session.gd" id="3_p70yv"]
+[ext_resource type="Script" path="res://scripts/ui/staff_view.gd" id="4_1uvlm"]
+[ext_resource type="Script" path="res://scripts/ui/piano_keyboard.gd" id="5_symo0"]
+[ext_resource type="PackedScene" path="res://scenes/ui/settings_panel.tscn" id="6_p76vl"]
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="7_qkija"]
+[ext_resource type="PackedScene" path="res://scenes/ui/pool_panel.tscn" id="8_u67y1"]
+[ext_resource type="Script" path="res://scripts/ui/pool_panel.gd" id="9_m0dbt"]
+[ext_resource type="Script" path="res://scripts/song_session.gd" id="10_song"]
+[ext_resource type="Script" path="res://scripts/ui/beat_indicator.gd" id="11_beat"]
+[ext_resource type="Script" path="res://scripts/defense/defense_view.gd" id="12_defense"]
+
+[node name="PracticeScreen" type="Control" unique_id=195484844]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme = ExtResource("1_j5jdn")
+script = ExtResource("2_3743t")
+
+[node name="Session" type="Node" parent="." unique_id=1937817127]
+unique_name_in_owner = true
+script = ExtResource("3_p70yv")
+
+[node name="SongSession" type="Node" parent="." unique_id=1600000001]
+unique_name_in_owner = true
+script = ExtResource("10_song")
+
+[node name="Background" type="ColorRect" parent="." unique_id=333977092]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.075, 0.08, 0.1, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=1528373218]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="Column" type="VBoxContainer" parent="Margin" unique_id=1331156332]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Margin/Column" unique_id=977682919]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Margin/Column/TopBar" unique_id=2126903198]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.36, 0.62, 1, 1)
+text = "Chord Master XR"
+
+[node name="Spacer" type="Control" parent="Margin/Column/TopBar" unique_id=2115007010]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusBar" type="HBoxContainer" parent="Margin/Column" unique_id=2138820739]
+layout_mode = 2
+
+[node name="ScoreLabel" type="Label" parent="Margin/Column/StatusBar" unique_id=460224983]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+
+[node name="Gap" type="Control" parent="Margin/Column/StatusBar" unique_id=1781274929]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+
+[node name="MidiLabel" type="Label" parent="Margin/Column/StatusBar" unique_id=944011065]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+
+[node name="Middle" type="HBoxContainer" parent="Margin/Column" unique_id=1758052772]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="NavCard" type="PanelContainer" parent="Margin/Column/Middle" unique_id=1700000101]
+layout_mode = 2
+
+[node name="NavBox" type="VBoxContainer" parent="Margin/Column/Middle/NavCard" unique_id=1700000102]
+custom_minimum_size = Vector2(290, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ModeHeading" type="Label" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=1700000103]
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Mode"
+
+[node name="ModeButton" type="OptionButton" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=223220501]
+fit_to_longest_item = false
+clip_text = true
+custom_minimum_size = Vector2(290, 52)
+theme_override_font_sizes/font_size = 19
+unique_name_in_owner = true
+layout_mode = 2
+selected = 0
+item_count = 4
+popup/item_0/text = "Play the chord"
+popup/item_0/id = 0
+popup/item_1/text = "Name It (multiple choice)"
+popup/item_1/id = 1
+popup/item_2/text = "Song (play along)"
+popup/item_2/id = 2
+popup/item_3/text = "Chord Defense (game)"
+popup/item_3/id = 3
+
+[node name="ExerciseHeading" type="Label" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=1700000104]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Exercise"
+
+[node name="ExerciseButton" type="OptionButton" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=1907771841]
+fit_to_longest_item = false
+clip_text = true
+custom_minimum_size = Vector2(290, 52)
+theme_override_font_sizes/font_size = 19
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Items are filled from ExerciseEngine.TYPES when the app runs."
+selected = 0
+item_count = 1
+popup/item_0/text = "Smart practice (adaptive)"
+popup/item_0/id = 0
+
+[node name="NavGap" type="Control" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=1700000105]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="ChordsButton" type="Button" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=97470823]
+custom_minimum_size = Vector2(290, 52)
+theme_override_font_sizes/font_size = 19
+unique_name_in_owner = true
+layout_mode = 2
+text = "Chords…"
+
+[node name="PoolLabel" type="Label" parent="Margin/Column/Middle/NavCard/NavBox" unique_id=967483687]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+autowrap_mode = 3
+
+[node name="StaffPanel" type="PanelContainer" parent="Margin/Column/Middle" unique_id=1878448236]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StaffBox" type="VBoxContainer" parent="Margin/Column/Middle/StaffPanel" unique_id=1700000020]
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="Beats" type="Control" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=1600000002]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 28)
+layout_mode = 2
+script = ExtResource("11_beat")
+
+[node name="ChordLabel" type="Label" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=111366809]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+theme_override_colors/font_color = Color(0.93, 0.93, 0.95, 1)
+horizontal_alignment = 1
+
+[node name="SubLabel" type="Label" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=1030141727]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Staff" type="Control" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=2072896298]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 160)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("4_1uvlm")
+
+[node name="GameArea" type="Control" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=1700000200]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+script = ExtResource("12_defense")
+
+[node name="BottomRow" type="Control" parent="Margin/Column/Middle/StaffPanel/StaffBox" unique_id=1700000107]
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TextCol" type="VBoxContainer" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow" unique_id=1700000108]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="NotesLabel" type="Label" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow/TextCol" unique_id=1086884335]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+theme_override_colors/font_color = Color(1, 0.75, 0.3, 1)
+horizontal_alignment = 1
+
+[node name="BelowLabel" type="Label" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow/TextCol" unique_id=1700000021]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow" unique_id=1700000109]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -240.0
+offset_top = -52.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 8
+alignment = 2
+
+[node name="SkipButton" type="Button" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow/Buttons" unique_id=1808111589]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Skip to the next chord (S)"
+text = "Skip"
+
+[node name="PauseButton" type="Button" parent="Margin/Column/Middle/StaffPanel/StaffBox/BottomRow/Buttons" unique_id=1700000031]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 52)
+layout_mode = 2
+tooltip_text = "Pause: play freely without being checked. Press again to carry on."
+toggle_mode = true
+theme_override_font_sizes/font_size = 19
+text = "Pause"
+
+[node name="PromptCard" type="PanelContainer" parent="Margin/Column/Middle" unique_id=967726492]
+layout_mode = 2
+
+[node name="PromptButtons" type="VBoxContainer" parent="Margin/Column/Middle/PromptCard" unique_id=198385100]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(290, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ShowHeading" type="Label" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000001]
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Show"
+
+[node name="NameToggle" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000002]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Show the chord name above the notation"
+toggle_mode = true
+text = "Name"
+metadata/setting = "show_chord_name"
+
+[node name="NotesToggle" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000003]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Show the note names under the notation"
+toggle_mode = true
+text = "Notes"
+metadata/setting = "show_notes"
+
+[node name="KeysToggle" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000004]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Highlight the chord on the on-screen keyboard"
+toggle_mode = true
+text = "Keys"
+metadata/setting = "show_keyboard_hint"
+
+[node name="ActionBox" type="VBoxContainer" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000005]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SoundHeading" type="Label" parent="Margin/Column/Middle/PromptCard/PromptButtons/ActionBox" unique_id=1700000006]
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Sound"
+
+[node name="HearRow" type="HBoxContainer" parent="Margin/Column/Middle/PromptCard/PromptButtons/ActionBox" unique_id=1700000007]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HearButton" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons/ActionBox/HearRow" unique_id=2108420225]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Play each new chord"
+toggle_mode = true
+text = "Hear"
+metadata/setting = "play_on_prompt"
+
+[node name="SayRow" type="HBoxContainer" parent="Margin/Column/Middle/PromptCard/PromptButtons/ActionBox" unique_id=1700000009]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SayButton" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons/ActionBox/SayRow" unique_id=746411734]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Speak each new chord name (after the sound, if Hear is on too)"
+toggle_mode = true
+text = "Say"
+metadata/setting = "voice_callout"
+
+[node name="StripSpacer" type="Control" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000106]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SettingsButton" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=579554983]
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+unique_name_in_owner = true
+layout_mode = 2
+text = "Settings…"
+
+[node name="Feedback" type="Label" parent="Margin/Column" unique_id=2078343159]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(0.93, 0.93, 0.95, 1)
+text = " "
+horizontal_alignment = 1
+
+[node name="Choices" type="HBoxContainer" parent="Margin/Column" unique_id=1495864988]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="SelectBar" type="HBoxContainer" parent="Margin/Column" unique_id=723694967]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="SelectHint" type="Label" parent="Margin/Column/SelectBar" unique_id=196933224]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Select the notes, then submit:"
+
+[node name="ClearButton" type="Button" parent="Margin/Column/SelectBar" unique_id=1614690555]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear"
+
+[node name="SubmitButton" type="Button" parent="Margin/Column/SelectBar" unique_id=507467102]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.85, 0.5, 1)
+text = "Submit ✓"
+
+[node name="SongBar" type="HBoxContainer" parent="Margin/Column" unique_id=1600000010]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="SongSelect" type="OptionButton" parent="Margin/Column/SongBar" unique_id=1600000011]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Songs come from data/songs.json"
+
+[node name="KeyDown" type="Button" parent="Margin/Column/SongBar" unique_id=1600000020]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Transpose down a semitone"
+text = "−"
+
+[node name="KeyLabel" type="Label" parent="Margin/Column/SongBar" unique_id=1600000021]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 0)
+layout_mode = 2
+tooltip_text = "Current key (transpose with − / +)"
+horizontal_alignment = 1
+text = "Key: C major"
+
+[node name="KeyUp" type="Button" parent="Margin/Column/SongBar" unique_id=1600000022]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Transpose up a semitone"
+text = "+"
+
+[node name="TempoLabel" type="Label" parent="Margin/Column/SongBar" unique_id=1600000012]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "BPM"
+
+[node name="BpmSpin" type="SpinBox" parent="Margin/Column/SongBar" unique_id=1600000013]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Tempo in beats per minute. Starts at the song's own tempo."
+min_value = 30.0
+max_value = 240.0
+value = 72.0
+rounded = true
+alignment = 1
+
+[node name="BpmReset" type="Button" parent="Margin/Column/SongBar" unique_id=1600000017]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Back to the song's own tempo"
+text = "Original"
+
+[node name="MetronomeCheck" type="CheckButton" parent="Margin/Column/SongBar" unique_id=1600000014]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Metronome"
+
+[node name="BackingCheck" type="CheckButton" parent="Margin/Column/SongBar" unique_id=1600000015]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Play each chord as it comes up"
+text = "Play chords"
+
+[node name="SongStart" type="Button" parent="Margin/Column/SongBar" unique_id=1600000016]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.85, 0.5, 1)
+text = "Start"
+
+[node name="DefenseBar" type="HBoxContainer" parent="Margin/Column" unique_id=1700000210]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="DefenseStart" type="Button" parent="Margin/Column/DefenseBar" unique_id=1700000211]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.35, 0.85, 0.5, 1)
+text = "Start"
+
+[node name="DefensePool" type="CheckButton" parent="Margin/Column/DefenseBar" unique_id=1700000212]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Attack with the chords in your chord pool instead of each sector's chords"
+text = "Use my chord pool"
+metadata/setting = "defense_use_pool"
+
+[node name="Keyboard" type="Control" parent="Margin/Column" unique_id=991080209]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 170)
+layout_mode = 2
+script = ExtResource("5_symo0")
+
+[node name="SettingsPanel" type="PopupPanel" parent="." unique_id=1123890202 instance=ExtResource("6_p76vl")]
+unique_name_in_owner = true
+size = Vector2i(780, 660)
+theme = ExtResource("1_j5jdn")
+script = ExtResource("7_qkija")
+
+[node name="PoolPanel" type="PopupPanel" parent="." unique_id=474495975 instance=ExtResource("8_u67y1")]
+unique_name_in_owner = true
+size = Vector2i(840, 680)
+theme = ExtResource("1_j5jdn")
+script = ExtResource("9_m0dbt")

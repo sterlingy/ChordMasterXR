@@ -1,0 +1,209 @@
+extends GutTest
+## Chord Defense rules, level design and records.
+
+
+func _c(sym: String) -> Theory.Chord:
+	return Theory.parse_chord(sym)
+
+
+func _t(id: int, sym: String, octave: int, progress := 0.5) -> Dictionary:
+	return {"id": id, "chord": _c(sym), "octave": octave, "progress": progress}
+
+
+# --- stations -------------------------------------------------------------
+
+func test_octave_numbers_follow_middle_c() -> void:
+	assert_eq(DefenseRules.octave_of(60), 4)
+	assert_eq(DefenseRules.octave_of(71), 4)
+	assert_eq(DefenseRules.octave_of(72), 5)
+	assert_eq(DefenseRules.octave_low(4), 60)
+
+
+func test_stations_are_full_octaves_in_range() -> void:
+	# 61 keys, C2..C7: full octaves 2..6.
+	assert_eq(DefenseRules.station_octaves(36, 96), [2, 3, 4, 5, 6] as Array[int])
+	# 37 keys starting at F: only the full octaves inside.
+	assert_eq(DefenseRules.station_octaves(53, 89), [4, 5] as Array[int])
+
+
+func test_88_keys_capped_at_eight_stations() -> void:
+	var o := DefenseRules.station_octaves(21, 108)
+	assert_true(o.size() <= DefenseRules.MAX_STATIONS)
+	assert_true(o.has(4), "keeps middle C's octave")
+
+
+func test_voicing_starts_in_station_octave() -> void:
+	var v := DefenseRules.voicing_in_octave(_c("G7"), 3, 96)
+	assert_false(v.is_empty())
+	assert_eq(DefenseRules.octave_of(v[0]), 3)
+
+
+func test_voicing_respects_top_of_keyboard() -> void:
+	# B major from octave 6 would go above C7 in root position; an inversion
+	# or nothing must be returned, never notes above `high`.
+	var v := DefenseRules.voicing_in_octave(_c("B"), 6, 96)
+	for m in v:
+		assert_true(m <= 96)
+
+
+# --- judging --------------------------------------------------------------
+
+func test_kill_needs_bass_in_station_octave() -> void:
+	var targets := [_t(1, "C", 4)]
+	assert_eq(DefenseRules.judge([60, 64, 67], targets)["kind"], "kill")
+	assert_eq(DefenseRules.judge([48, 52, 55], targets)["kind"], "wrong_octave")
+
+
+func test_any_inversion_and_spread_counts() -> void:
+	var targets := [_t(1, "C", 4)]
+	assert_eq(DefenseRules.judge([64, 67, 72], targets)["kind"], "kill")   # 1st inversion, E4 bass
+	assert_eq(DefenseRules.judge([60, 67, 76], targets)["kind"], "kill")   # open voicing
+
+
+func test_closest_attacker_wins() -> void:
+	# A4 C5 E5: lowest note A4 is in octave 4.
+	var r := DefenseRules.judge([69, 72, 76], [_t(1, "Am", 4, 0.2), _t(2, "Am", 4, 0.8), _t(3, "Am", 5, 0.95)])
+	assert_eq(r["kind"], "kill")
+	assert_eq(r["id"], 2, "the nearer of the two attacking octave 4")
+
+
+func test_building_a_chord_is_pending() -> void:
+	var targets := [_t(1, "Cmaj7", 4)]
+	assert_eq(DefenseRules.judge([60, 64, 67], targets)["kind"], "pending")
+
+
+func test_wrong_three_notes_is_misfire() -> void:
+	assert_eq(DefenseRules.judge([60, 61, 62], [_t(1, "C", 4)])["kind"], "misfire")
+
+
+func test_two_wrong_notes_is_not_yet_a_misfire() -> void:
+	assert_eq(DefenseRules.judge([60, 61], [_t(1, "C", 4)])["kind"], "pending")
+
+
+func test_extra_note_is_not_the_chord() -> void:
+	assert_false(DefenseRules.plays_chord([60, 64, 67, 70], _c("C")))
+	assert_true(DefenseRules.plays_chord([60, 64, 67, 70], _c("C7")))
+
+
+# --- scoring --------------------------------------------------------------
+
+func test_combo_grows_and_caps() -> void:
+	assert_eq(DefenseRules.combo_multiplier(0), 1)
+	assert_eq(DefenseRules.combo_multiplier(4), 2)
+	assert_eq(DefenseRules.combo_multiplier(400), DefenseRules.COMBO_MAX)
+
+
+func test_early_kills_score_more() -> void:
+	var c := _c("C")
+	assert_gt(DefenseRules.kill_points(c, 0.1, 0), DefenseRules.kill_points(c, 0.9, 0))
+	assert_gt(DefenseRules.kill_points(_c("C7"), 0.5, 0), DefenseRules.kill_points(c, 0.5, 0))
+
+
+# --- level design ---------------------------------------------------------
+
+func test_waves_get_harder() -> void:
+	var a := DefenseWaves.plan(1)
+	var b := DefenseWaves.plan(4)
+	assert_gt(b["count"], a["count"])
+	assert_lt(b["interval"], a["interval"])
+	assert_lt(b["travel"], a["travel"])
+
+
+func test_sectors_bring_new_chords() -> void:
+	assert_eq(DefenseWaves.plan(1)["sector"], "Triad Nebula")
+	assert_true((DefenseWaves.plan(9)["qualities"] as Array).has("m7"))
+	assert_false((DefenseWaves.plan(1)["qualities"] as Array).has("m7"))
+
+
+func test_boss_every_fifth_wave() -> void:
+	assert_false(DefenseWaves.plan(4)["boss"])
+	assert_true(DefenseWaves.plan(5)["boss"])
+	assert_true(DefenseWaves.plan(10)["boss"])
+
+
+func test_all_sector_qualities_exist() -> void:
+	for sec in DefenseWaves.SECTORS:
+		for q in sec["qualities"]:
+			assert_true(Theory.QUALITIES.has(q), q)
+
+
+func test_progression_chords_in_key() -> void:
+	var cs := DefenseWaves.progression_chords(DefenseWaves.PROGRESSIONS[0], Theory.parse_note("C"))
+	assert_eq(cs.map(func(c): return c.pretty()), ["Dm7", "G7", "Cmaj7"])
+
+
+# --- records --------------------------------------------------------------
+
+func test_leaderboard_keeps_top_scores_in_order() -> void:
+	var r := DefenseRecords.new()
+	r.save_path = "user://test_defense_records.json"
+	for s in [500, 3000, 1200]:
+		r.add_game(5, {"score": s, "wave": 2, "kills": 3, "accuracy": 0.8, "best_combo": 4})
+	var top := r.top(5)
+	assert_eq(top.map(func(e): return int(e["score"])), [3000, 1200, 500])
+	assert_eq(r.rank_for(5, 2000), 2)
+	assert_eq(r.top(7), [], "boards are per keyboard size")
+
+
+func test_leaderboard_trims_to_top_n() -> void:
+	var r := DefenseRecords.new()
+	for i in DefenseRecords.TOP_N + 5:
+		r.add_game(5, {"score": i * 10, "wave": 1, "kills": 1, "accuracy": 1.0, "best_combo": 1})
+	assert_eq(r.top(5).size(), DefenseRecords.TOP_N)
+	assert_eq(r.rank_for(5, 0), 0)
+
+
+func test_records_round_trip() -> void:
+	var r := DefenseRecords.new()
+	r.save_path = "user://test_defense_records.json"
+	r.add_game(5, {"score": 900, "wave": 3, "kills": 9, "accuracy": 0.9, "best_combo": 6})
+	r.record_kill("C:maj", 2000)
+	r.record_escape("F#:min")
+	r.save()
+	var r2 := DefenseRecords.new()
+	r2.save_path = r.save_path
+	r2.load_from_disk()
+	assert_eq(int(r2.top(5)[0]["score"]), 900)
+	assert_eq(int(r2.lifetime["games"]), 1)
+	assert_eq(r2.nemesis_chords(1), ["F#:min"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(r.save_path))
+
+
+# --- AR placement ---------------------------------------------------------
+
+func test_ar_frame_puts_stations_over_their_octaves() -> void:
+	var lay := KeyboardLayout.new()
+	lay.low = 36
+	lay.high = 96
+	lay.viewer = Vector3(0, 1.5, 0.6)
+	# Fingertip points on the lowest and highest keys, 61 keys ≈ 0.84 m.
+	lay.p_low = Vector3(-0.42, 0.8, 0.0)
+	lay.p_high = Vector3(0.42, 0.8, 0.0)
+	var f := DefenseGame.ar_frame(lay, 36, 96)
+	var xform: Transform3D = f[0]
+	var xs: Array = f[1]
+	assert_eq(xs.size(), 5)
+	for i in range(1, xs.size()):
+		assert_almost_eq(float(xs[i]) - float(xs[i - 1]), lay.white_width() * 7.0, 0.01, "one octave apart")
+	assert_lt(float(xs[0]), 0.0)
+	assert_gt(float(xs[-1]), 0.0)
+	# −z of the game frame points away from the player.
+	var away: Vector3 = -xform.basis.z
+	assert_lt(away.dot(lay.viewer - xform.origin), 0.0)
+	# Stations sit behind the keys (further from the player than the keys).
+	assert_gt(xform.origin.distance_to(lay.viewer), lay.mid().distance_to(lay.viewer))
+
+
+func test_waves_cycle_special_events() -> void:
+	assert_eq(DefenseWaves.plan(1)["special"], "")
+	var seen := {}
+	for w in range(2, 5):
+		seen[DefenseWaves.plan(w)["special"]] = true
+	assert_eq(seen.size(), 3, "three different specials in a row")
+
+
+func test_new_sector_introduces_new_qualities() -> void:
+	assert_eq(DefenseWaves.new_qualities(1), [])
+	assert_eq(DefenseWaves.new_qualities(5), ["dim", "aug"])
+	assert_eq(DefenseWaves.new_qualities(6), [], "only on a sector's first wave")
+	assert_true(DefenseWaves.new_qualities(9).has("m7"))

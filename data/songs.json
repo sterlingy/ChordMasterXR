@@ -1,0 +1,92 @@
+{
+  "_format": "Each song: sections of bars, played in 'order'. A bar is one or more chord symbols separated by spaces; the bar's beats are split evenly between them ('F C' in 4/4 = 2 beats each). Arrangements are simplified (chords only) and may differ from the recordings.",
+  "songs": [
+    {
+      "id": "hotel_california",
+      "title": "Hotel California",
+      "artist": "Eagles",
+      "year": 1977,
+      "decade": "70s",
+      "bpm": 74,
+      "beats_per_bar": 4,
+      "key": "Bm",
+      "sections": {
+        "Verse": ["Bm", "F#", "A", "E", "G", "D", "Em", "F#"],
+        "Chorus": ["G", "D", "F#", "Bm", "G", "D", "Em", "F#"]
+      },
+      "order": ["Verse", "Chorus"]
+    },
+    {
+      "id": "imagine",
+      "title": "Imagine",
+      "artist": "John Lennon",
+      "year": 1971,
+      "decade": "70s",
+      "bpm": 76,
+      "beats_per_bar": 4,
+      "key": "C",
+      "sections": {
+        "Verse": ["C", "Cmaj7", "F", "F", "C", "Cmaj7", "F", "F"],
+        "Chorus": ["F", "G", "C", "E7", "F", "G", "C", "C"]
+      },
+      "order": ["Verse", "Chorus"]
+    },
+    {
+      "id": "heavens_door",
+      "title": "Knockin' on Heaven's Door",
+      "artist": "Bob Dylan",
+      "year": 1973,
+      "decade": "70s",
+      "bpm": 69,
+      "beats_per_bar": 4,
+      "key": "G",
+      "sections": {
+        "Verse": ["G", "D", "Am", "Am", "G", "D", "C", "C"]
+      },
+      "order": ["Verse", "Verse"]
+    },
+    {
+      "id": "let_it_be",
+      "title": "Let It Be",
+      "artist": "The Beatles",
+      "year": 1970,
+      "decade": "Beatles",
+      "bpm": 72,
+      "beats_per_bar": 4,
+      "key": "C",
+      "sections": {
+        "Verse": ["C", "G", "Am", "F", "C", "G", "F", "C"],
+        "Chorus": ["Am", "G", "F", "C", "C", "G", "F", "C"]
+      },
+      "order": ["Verse", "Chorus"]
+    },
+    {
+      "id": "hey_jude",
+      "title": "Hey Jude",
+      "artist": "The Beatles",
+      "year": 1968,
+      "decade": "Beatles",
+      "bpm": 74,
+      "beats_per_bar": 4,
+      "key": "F",
+      "sections": {
+        "Verse": ["F", "C", "C7", "F", "Bb", "F", "C", "F"]
+      },
+      "order": ["Verse", "Verse"]
+    },
+    {
+      "id": "yesterday",
+      "title": "Yesterday",
+      "artist": "The Beatles",
+      "year": 1965,
+      "decade": "Beatles",
+      "bpm": 96,
+      "beats_per_bar": 4,
+      "key": "F",
+      "sections": {
+        "Verse": ["F", "Em7 A7", "Dm", "Bb C7", "F", "Dm G7", "Bb F", "F"]
+      },
+      "order": ["Verse", "Verse"]
+    }
+  ]
+}

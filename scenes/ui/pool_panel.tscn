@@ -1,0 +1,155 @@
+[gd_scene format=3]
+
+[ext_resource type="Theme" path="res://ui/theme.tres" id="1_asapr"]
+[ext_resource type="Script" path="res://scripts/ui/pool_panel.gd" id="2_cj236"]
+
+[node name="PoolPanel" type="PopupPanel" unique_id=474495975]
+size = Vector2i(840, 680)
+theme = ExtResource("1_asapr")
+script = ExtResource("2_cj236")
+
+[node name="Layout" type="VBoxContainer" parent="." unique_id=89929765]
+custom_minimum_size = Vector2(820, 640)
+theme_override_constants/separation = 10
+
+[node name="PresetsHeading" type="Label" parent="Layout" unique_id=2143647553]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.36, 0.62, 1, 1)
+text = "Presets"
+
+[node name="PresetFlow" type="HFlowContainer" parent="Layout" unique_id=1737326739]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(800, 0)
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="SourceTabs" type="TabContainer" parent="Layout" unique_id=541346676]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Chord types × roots" type="VBoxContainer" parent="Layout/SourceTabs" unique_id=870486894]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="TypesLabel" type="Label" parent="Layout/SourceTabs/Chord types × roots" unique_id=1215602383]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Chord types"
+
+[node name="QualityFlow" type="HFlowContainer" parent="Layout/SourceTabs/Chord types × roots" unique_id=1202867225]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(780, 0)
+layout_mode = 2
+
+[node name="RootsLabel" type="Label" parent="Layout/SourceTabs/Chord types × roots" unique_id=799724313]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Roots"
+
+[node name="RootFlow" type="HFlowContainer" parent="Layout/SourceTabs/Chord types × roots" unique_id=1687128587]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(780, 0)
+layout_mode = 2
+
+[node name="QuickRoots" type="HBoxContainer" parent="Layout/SourceTabs/Chord types × roots" unique_id=797393781]
+layout_mode = 2
+
+[node name="AllRoots" type="Button" parent="Layout/SourceTabs/Chord types × roots/QuickRoots" unique_id=1651641919]
+unique_name_in_owner = true
+layout_mode = 2
+text = "All 12 roots"
+
+[node name="NaturalRoots" type="Button" parent="Layout/SourceTabs/Chord types × roots/QuickRoots" unique_id=1503266607]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Naturals only"
+
+[node name="ClearRoots" type="Button" parent="Layout/SourceTabs/Chord types × roots/QuickRoots" unique_id=2132348683]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear roots"
+
+[node name="Chords in a key" type="VBoxContainer" parent="Layout/SourceTabs" unique_id=1082876203]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="KeyRow" type="HBoxContainer" parent="Layout/SourceTabs/Chords in a key" unique_id=98486927]
+layout_mode = 2
+
+[node name="KeyLabel" type="Label" parent="Layout/SourceTabs/Chords in a key/KeyRow" unique_id=655139569]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.93, 0.93, 0.95, 1)
+text = "Key: "
+
+[node name="KeyTonic" type="OptionButton" parent="Layout/SourceTabs/Chords in a key/KeyRow" unique_id=1926169649]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="KeyScale" type="OptionButton" parent="Layout/SourceTabs/Chords in a key/KeyRow" unique_id=1507334259]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="KeyTriads" type="CheckBox" parent="Layout/SourceTabs/Chords in a key" unique_id=455092633]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Triads"
+
+[node name="KeySevenths" type="CheckBox" parent="Layout/SourceTabs/Chords in a key" unique_id=1856276217]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Seventh chords"
+
+[node name="KeyTip" type="Label" parent="Layout/SourceTabs/Chords in a key" unique_id=875928477]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Tip: for minor keys, pick the minor tonic (e.g. A for A minor)."
+autowrap_mode = 3
+
+[node name="Custom list" type="VBoxContainer" parent="Layout/SourceTabs" unique_id=784822539]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="CustomHint" type="Label" parent="Layout/SourceTabs/Custom list" unique_id=1009701067]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+text = "Chord symbols separated by spaces or commas, e.g.  Cmaj7 Dm7 G7 F#m7b5 Bb"
+autowrap_mode = 3
+
+[node name="CustomText" type="TextEdit" parent="Layout/SourceTabs/Custom list" unique_id=1422949250]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Bottom" type="HBoxContainer" parent="Layout" unique_id=1476066317]
+layout_mode = 2
+
+[node name="Summary" type="Label" parent="Layout/Bottom" unique_id=299674478]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.62, 0.64, 0.7, 1)
+
+[node name="CancelButton" type="Button" parent="Layout/Bottom" unique_id=1228955852]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="ApplyButton" type="Button" parent="Layout/Bottom" unique_id=1477656610]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.85, 0.5, 1)
+text = "Use these chords"

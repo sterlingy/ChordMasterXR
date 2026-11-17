@@ -1,0 +1,29 @@
+plugins {
+    id "com.android.library"
+}
+
+android {
+    namespace "org.chordmasterxr.midi"
+    compileSdk 36
+    defaultConfig {
+        minSdk 24
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Provided by the Godot app at runtime; only needed to compile.
+    compileOnly files("libs/godot-lib.aar")
+}
+
+// Copies the built AARs into the Godot add-on folder.
+tasks.register("copyToGodot", Copy) {
+    dependsOn "assembleDebug", "assembleRelease"
+    from("build/outputs/aar")
+    include("midi-debug.aar", "midi-release.aar")
+    rename("midi-(.*).aar", 'ChordMasterMidi-$1.aar')
+    into("../../addons/chordmaster_midi/bin")
+}

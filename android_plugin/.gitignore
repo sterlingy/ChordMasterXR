@@ -1,0 +1,5 @@
+/.gradle/
+/build/
+/midi/build/
+/local.properties
+/midi/libs/*.aar
