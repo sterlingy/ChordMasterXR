@@ -62,7 +62,8 @@ const DEFAULTS := {
 	"xr_kb_adjust": false,         # show the overlay's drag handles
 	"xr_kb_step": "normal",        # nudge step: "fine" | "normal" | "coarse"
 	"xr_keyboard_cal_base": null,  # calibration before any adjustments
-	"xr_panel_scale": 1.0,         # XR panel size multiplier (1.0 = 36 cm wide)
+	"xr_panel_scale": 1.0,
+	"xr_field_offset": [0.0, 0.0, 0.0], # Chord Defense playfield moved by its handle (game frame, m)         # XR panel size multiplier (1.0 = 36 cm wide)
 }
 
 var _values := {}

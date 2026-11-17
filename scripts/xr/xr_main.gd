@@ -9,6 +9,8 @@ extends Node3D
 ## - Touch buttons directly with your index fingertip.
 ## - Pinch the bar under the panel to move it; pinch a corner ball to
 ##   resize it (directly with your hand or with the ray).
+## - Chord Defense on the real keyboard: pinch the blue ball left of the
+##   stations to slide the playfield (between games).
 
 const PANEL_SIZE := Vector2(0.36, 0.2025)      # metres (16:9) at scale 1
 const PANEL_PIXELS := Vector2i(1600, 900)
@@ -22,6 +24,7 @@ var pointers: Array[XRPointer] = []
 var panel: XRPanel
 var keyboard_overlay: XRKeyboardOverlay
 var _defense: DefenseView
+var _field_handle: XRFieldHandle
 var _defense_cal := []          # calibration the game was placed with
 
 
@@ -64,6 +67,9 @@ func _ready() -> void:
 	keyboard_overlay.calibration_status.connect(func(t: String): screen._show_feedback(t, UITheme.WARN))
 	add_child(keyboard_overlay)
 
+	_field_handle = XRFieldHandle.new()
+	add_child(_field_handle)
+
 	for hand in ["left_hand", "right_hand"]:
 		var c := XRController3D.new()
 		c.tracker = hand
@@ -78,12 +84,14 @@ func _ready() -> void:
 		p.panel = panel
 		p.touch = touch
 		p.kb = keyboard_overlay
+		p.grabbables = [keyboard_overlay, _field_handle]
 		c.add_child(p)
 		pointers.append(p)
 
 	# Chord Defense: in the headset the game leaves the panel and sits on
 	# the real keyboard (once it is calibrated).
 	_defense = screen.get_node("%GameArea")
+	_field_handle.game = _defense.game
 	var t := Timer.new()
 	t.wait_time = 0.5
 	t.autostart = true
@@ -120,14 +128,18 @@ func _update_defense_ar() -> void:
 	var game := _defense.game
 	var cal = Settings.get_value("xr_keyboard_cal")
 	var want: bool = Settings.get_value("practice_mode") == "defense" and keyboard_overlay.is_calibrated()
-	if want and (not game.in_ar or _defense_cal != [cal]):
+	var key := [cal, Settings.get_value("xr_field_offset")]
+	if _field_handle.is_grabbed():
+		return
+	if want and (not game.in_ar or _defense_cal != key):
 		if game.get_parent() != self:
 			game.reparent(self, false)
 		var frame := DefenseGame.ar_frame(keyboard_overlay.layout,
 				int(Settings.get_value("range_low")), int(Settings.get_value("range_high")))
-		game.enter_ar(frame[0], frame[1])
+		_field_handle.base = frame[0]
+		game.enter_ar(_field_handle.placed(), frame[1])
 		_defense.set_ar(true)
-		_defense_cal = [cal]
+		_defense_cal = key
 	elif not want and game.in_ar:
 		game.reparent(_defense.viewport(), false)
 		game.exit_ar()

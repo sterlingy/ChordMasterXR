@@ -88,11 +88,16 @@ func _build() -> void:
 	_label.outline_size = 10
 	_label.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
 	_label.modulate = color.lightened(0.4)
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.fixed_size = true
-	_label.pixel_size = 0.0011
+	# Fixed in the playfield (no billboard, real-world size): lies just in
+	# front of the base, tipped back 60° so it reads from above — the player
+	# looks down at the keyboard. ~2.2 cm tall (30% smaller than the old
+	# screen-sized label at arm's length).
+	_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	_label.fixed_size = false
+	_label.pixel_size = 0.00055
 	_label.no_depth_test = true
-	_label.position = Vector3(0, -0.012, 0.055)
+	_label.rotation_degrees = Vector3(-60, 0, 0)
+	_label.position = Vector3(0, 0.004, 0.078)
 	add_child(_label)
 
 

@@ -22,6 +22,10 @@ const OCTAVE_W := 0.165          # one octave of real keys, metres
 const FIELD_DEPTH := 1.4
 const TOP_Y := 0.27
 const INTRO_S := 2.6
+## AR: gap between the back of the white keys and the station row. Station
+## bases are ~6 cm in radius, so this leaves ~5 cm of clear space between
+## the keyboard overlay and the front edge of the playfield.
+const AR_GAP := 0.11
 const CLEAR_S := 3.0
 
 ## Build a camera + sky for a desktop view (off in AR, where the room is
@@ -152,7 +156,7 @@ static func ar_frame(lay: KeyboardLayout, low: int, high: int) -> Array:
 	var along: Vector3 = ax[0]
 	var up: Vector3 = ax[1]
 	var back: Vector3 = ax[2]
-	var behind := lay.white_width() * KeyboardLayout.WHITE_LEN + 0.04
+	var behind := lay.white_width() * KeyboardLayout.WHITE_LEN + AR_GAP
 	var row := lay.mid() + back * behind + up * 0.005
 	var centres := {}
 	for k in lay.keys():

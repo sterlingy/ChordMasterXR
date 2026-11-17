@@ -8,13 +8,19 @@ extends Node3D
 ##   - your hand is right at a handle (within NEAR_M)  -> grab it directly
 ##   - the ray points at a handle                      -> grab it at a distance
 ##   - the ray points at the panel                     -> click
-## The same works for the keyboard overlay's adjust handles (if `kb` is set).
+## The same works for the keyboard overlay's adjust handles (if `kb` is set)
+## and anything else in `grabbables` with the same handle API
+## (handle_near / set_hover / begin_handle / update_handle / end_handle), e.g.
+## the Chord Defense playfield handle. Their hit bodies carry the meta
+## "xr_kb_handle" (handle name) and optionally "xr_grab_target" (the owner;
+## defaults to `kb`).
 
 const LENGTH := 3.0
 const NEAR_M := 0.06
 
 var panel: XRPanel
 var kb: XRKeyboardOverlay            # keyboard overlay (optional)
+var grabbables: Array = []           # objects with the handle API (kb is added if missing)
 var touch: XRHandTouch               # same hand's fingertip toucher (optional)
 var ray: RayCast3D
 var beam: MeshInstance3D
@@ -23,7 +29,7 @@ var _pressed := false
 var _controller: XRController3D
 var _grabbing := false
 var _grab_ray_dist := -1.0          # >= 0 when grabbing along the ray
-var _grab_kb := false               # grabbing a keyboard-overlay handle
+var _grab_target: Object = null      # grabbable being dragged (null = panel)
 var _hovered: Node = null
 var _id := 0
 
@@ -31,6 +37,8 @@ var _id := 0
 func _ready() -> void:
 	_controller = get_parent() as XRController3D
 	_id = get_instance_id()
+	if kb and not grabbables.has(kb):
+		grabbables.push_front(kb)
 	ray = RayCast3D.new()
 	ray.target_position = Vector3(0, 0, -LENGTH)
 	ray.collision_mask = 1 << 4
@@ -69,8 +77,8 @@ func _physics_process(_delta: float) -> void:
 		if _grabbing:
 			_end_grab()
 		_set_hover(null)
-		if kb:
-			kb.set_hover(_id, "")
+		for g in grabbables:
+			g.set_hover(_id, "")
 		return
 
 	var trigger := _controller.get_float("trigger") > 0.6 or _controller.is_button_pressed("trigger_click") \
@@ -91,16 +99,28 @@ func _physics_process(_delta: float) -> void:
 		length = global_position.distance_to(point)
 	var ray_handle: Node = collider if collider and collider.has_meta("xr_handle") else null
 	var near_handle: Node = panel.handle_near(hand_point, NEAR_M * panel.scale.x)
-	var ray_kb: String = str(collider.get_meta("xr_kb_handle")) if collider and collider.has_meta("xr_kb_handle") else ""
-	var near_kb: String = kb.handle_near(hand_point, NEAR_M * 0.6) if kb and not near_handle else ""
+	var ray_t: Object = null
+	var ray_w := ""
+	if collider and collider.has_meta("xr_kb_handle"):
+		ray_w = str(collider.get_meta("xr_kb_handle"))
+		ray_t = collider.get_meta("xr_grab_target", kb)
+	var near_t: Object = null
+	var near_w := ""
+	if not near_handle:
+		for g in grabbables:
+			var w: String = g.handle_near(hand_point, NEAR_M * 0.6)
+			if w != "":
+				near_t = g
+				near_w = w
+				break
 
 	# --- grabbing in progress
 	if _grabbing:
 		var grab_point := hand_point
 		if _grab_ray_dist >= 0.0:
 			grab_point = global_position + (-global_basis.z) * _grab_ray_dist
-		if _grab_kb:
-			kb.update_handle(_id, grab_point)
+		if _grab_target:
+			_grab_target.update_handle(_id, grab_point)
 		else:
 			panel.update_grab(_id, grab_point)
 		_draw_beam(_grab_ray_dist if _grab_ray_dist >= 0.0 else 0.0, _grab_ray_dist >= 0.0, grab_point)
@@ -110,19 +130,25 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	_set_hover(near_handle if near_handle else ray_handle)
-	if kb:
-		kb.set_hover(_id, near_kb if near_kb != "" else ("" if near_handle else ray_kb))
+	for g in grabbables:
+		var w := ""
+		if near_t:
+			w = near_w if g == near_t else ""
+		elif not near_handle and g == ray_t:
+			w = ray_w
+		g.set_hover(_id, w)
 
 	# --- start a grab?
-	if trigger and not _pressed and (near_kb != "" or (ray_kb != "" and not near_handle)) and not panel.is_grabbed():
+	if trigger and not _pressed and (near_t or (ray_t and not near_handle)) and not panel.is_grabbed():
 		_grabbing = true
-		_grab_kb = true
-		if near_kb != "":
+		if near_t:
+			_grab_target = near_t
 			_grab_ray_dist = -1.0
-			kb.begin_handle(_id, near_kb, hand_point)
+			near_t.begin_handle(_id, near_w, hand_point)
 		else:
+			_grab_target = ray_t
 			_grab_ray_dist = length
-			kb.begin_handle(_id, ray_kb, point)
+			ray_t.begin_handle(_id, ray_w, point)
 		_pressed = trigger
 		return
 	if trigger and not _pressed and not panel.is_grabbed():
@@ -169,11 +195,11 @@ func _draw_beam(length: float, show_dot: bool, dot_pos: Vector3) -> void:
 
 
 func _end_grab() -> void:
-	if _grab_kb:
-		kb.end_handle(_id)
+	if _grab_target:
+		_grab_target.end_handle(_id)
 	else:
 		panel.end_grab(_id)
-	_grab_kb = false
+	_grab_target = null
 	_grabbing = false
 	_grab_ray_dist = -1.0
 

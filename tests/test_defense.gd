@@ -194,6 +194,31 @@ func test_ar_frame_puts_stations_over_their_octaves() -> void:
 	assert_gt(xform.origin.distance_to(lay.viewer), lay.mid().distance_to(lay.viewer))
 
 
+func test_ar_frame_leaves_space_between_keys_and_playfield() -> void:
+	var lay := KeyboardLayout.new()
+	lay.low = 36
+	lay.high = 96
+	lay.viewer = Vector3(0, 1.5, 0.6)
+	lay.p_low = Vector3(-0.42, 0.8, 0.0)
+	lay.p_high = Vector3(0.42, 0.8, 0.0)
+	var xform: Transform3D = DefenseGame.ar_frame(lay, 36, 96)[0]
+	var back: Vector3 = lay.axes()[2]
+	var keys_back_edge := lay.white_width() * KeyboardLayout.WHITE_LEN
+	var row := (xform.origin - lay.mid()).dot(back)
+	# Station bases are 5.8 cm in radius: keep ≥ 3 cm clear in front of them.
+	assert_gt(row - keys_back_edge - 0.058, 0.03, "playfield front edge clears the keys")
+
+
+func test_field_handle_offset_moves_along_game_frame() -> void:
+	var h := XRFieldHandle.new()
+	h.base = Transform3D(Basis(Vector3(0, 1, 0), PI / 2.0), Vector3(1, 0.8, 0))
+	var t := h.placed(Vector3(0, 0, -0.1))
+	# 10 cm along the frame's −z (away from the player), not world −z.
+	assert_almost_eq(t.origin.distance_to(h.base.origin), 0.1, 0.0001)
+	assert_almost_eq((t.origin - h.base.origin).normalized().dot(-h.base.basis.z), 1.0, 0.0001)
+	h.free()
+
+
 func test_waves_cycle_special_events() -> void:
 	assert_eq(DefenseWaves.plan(1)["special"], "")
 	var seen := {}

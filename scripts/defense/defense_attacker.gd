@@ -5,7 +5,9 @@ extends Node3D
 ## major and minor triads are mirror images, augmented is an equilateral
 ## triangle, dim7 is a square. A glowing orb sits on each chord tone,
 ## coloured by its job in the chord, and lights up while you hold that
-## note. The name plate always faces you and is drawn on top.
+## note. Hull and plates hold a fixed orientation in the playfield (facing
+## the player's side, tipped back to read from above); plates are drawn on
+## top.
 ##
 ## Movement is a progress value t (0 = just arrived, 1 = hits its station)
 ## along a path that depends on `kind`. The game owns lanes/stations and
@@ -14,8 +16,12 @@ extends Node3D
 signal reached_station(attacker: DefenseAttacker)
 
 const KINDS := ["drifter", "jumper", "diver", "missile", "boss"]
-## Name plate size (Label3D fixed_size pixel size): big enough to read at a glance.
+## Name plate size (Label3D fixed_size pixel size): big enough to read at a
+## glance. Plates keep a constant on-screen size but never turn.
 const PLATE_PX := 0.0014
+## Fixed pitch for hull and plates: faces the player, top tipped away so
+## it reads from above (the player looks down at the keyboard).
+const FACE_PITCH_DEG := -35.0
 
 var kind := "drifter"
 var chords: Array = []              # Theory.Chord; bosses carry several
@@ -125,25 +131,15 @@ func set_path(far_z: float, top_y: float, rng: RandomNumberGenerator) -> void:
 	position = start_pos
 
 
-## The hull always faces the player with its root at the top, so the
-## chord's silhouette reads the same everywhere (no spinning: major and
-## minor are mirror images, and turning would blur that). A gentle bob
+## The hull has a fixed orientation (FACE_PITCH_DEG, root at the top), so
+## the chord's silhouette reads the same everywhere and never turns (major
+## and minor are mirror images; turning would blur that). A gentle bob
 ## keeps it alive.
 func _process(_delta: float) -> void:
 	if _hull == null:
 		return
-	var cam := get_viewport().get_camera_3d()
 	var bob := sin(Time.get_ticks_msec() / 1000.0 * 2.2 + _spin * 10.0) * radius * 0.12
 	_hull.position.y = bob
-	if cam:
-		var to_cam := cam.global_position - _hull.global_position
-		if to_cam.length() > 0.001:
-			var z := to_cam.normalized()
-			var x := Vector3.UP.cross(z)
-			if x.length() < 0.001:
-				x = Vector3.RIGHT
-			x = x.normalized()
-			_hull.global_basis = Basis(x, z.cross(x), z).scaled(_hull.scale)
 
 
 ## Arrival effect: the ship scales up out of a flash.
@@ -221,6 +217,7 @@ func _path(p: float) -> Vector3:
 func _build() -> void:
 	_base_color = family_color(chord().quality)
 	_hull = Node3D.new()
+	_hull.rotation_degrees.x = FACE_PITCH_DEG
 	add_child(_hull)
 	_rebuild_hull()
 	if kind == "missile":
@@ -282,9 +279,10 @@ func _label(size_px: int, color: Color) -> Label3D:
 	l.outline_size = maxi(8, size_px / 4)
 	l.outline_modulate = Color(0.02, 0.02, 0.05, 0.95)
 	l.modulate = color
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	l.fixed_size = true
 	l.pixel_size = PLATE_PX
+	l.rotation_degrees.x = FACE_PITCH_DEG
 	l.no_depth_test = true
 	l.render_priority = 10
 	l.outline_render_priority = 9

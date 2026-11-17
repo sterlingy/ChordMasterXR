@@ -337,6 +337,43 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 			for m in [60, 64, 67]:
 				Midi.handle_message(0, MIDI_MESSAGE_NOTE_OFF, m, 0)
 			print("DEV packets sent: ", Midi.net.packets_sent, "  status: ", Midi.net.status_text())
+		"defense_ar_left", "defense_ar_right":
+			# Desktop preview of Chord Defense placed on a calibrated real
+			# keyboard (as in XR), seen from the left or right of the player.
+			screen.visible = false
+			var world := Node3D.new()
+			tree.root.add_child(world)
+			var cam := Camera3D.new()
+			world.add_child(cam)
+			var side := -0.35 if script_name == "defense_ar_left" else 0.35
+			cam.position = Vector3(side, 1.25, 0.45)
+			cam.look_at(Vector3(0, 0.8, -0.25))
+			cam.fov = 60
+			cam.current = true
+			var light := DirectionalLight3D.new()
+			light.rotation_degrees = Vector3(-60, 20, 0)
+			world.add_child(light)
+			Settings.set_value("range_low", 36)
+			Settings.set_value("range_high", 96)
+			var ov := XRKeyboardOverlay.new()
+			ov.source = screen._keyboard
+			world.add_child(ov)
+			ov.layout.viewer = Vector3(0, 1.25, 0.45)
+			ov.layout.p_low = Vector3(-0.42, 0.80, 0.0)
+			ov.layout.p_high = Vector3(0.42, 0.80, 0.0)
+			ov._calibrated = true
+			ov._rebuild()
+			var g := DefenseGame.new()
+			g.desktop_view = false
+			world.add_child(g)
+			var frame := DefenseGame.ar_frame(ov.layout, 36, 96)
+			g.enter_ar(frame[0], frame[1])
+			g.set_show_notes(true)
+			g.show_showcase()
+			await tree.create_timer(0.8).timeout
+			for st in g.stations:
+				var l: Label3D = st._label
+				print("DEV label ", l.text, " basis ", l.global_basis, " billboard ", l.billboard)
 		"overlay_preview", "overlay_adjust":
 			# Desktop preview of the XR keyboard overlay (no headset): a fake
 			# table-height keyboard seen from where a player's eyes would be.
