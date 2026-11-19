@@ -59,13 +59,14 @@ static func midi_for(note: Theory.Note, octave: int) -> int:
 
 ## Picks a root position so the voicing fits [low, high]. Prefers the
 ## placement whose centre is closest to `centre`. Returns -1 if none fits.
-static func place_root(chord: Theory.Chord, inversion: int, low: int, high: int, centre := 62) -> int:
+## `disabled`: octaves the lowest note may not be in.
+static func place_root(chord: Theory.Chord, inversion: int, low: int, high: int, centre := 62, disabled: Array = []) -> int:
 	var best := -1
 	var best_d := INF
 	for octave in range(0, 9):
 		var rm := midi_for(chord.root, octave)
 		var v := chord.voicing(rm, inversion)
-		if v[0] < low or v[-1] > high:
+		if v[0] < low or v[-1] > high or disabled.has(bass_octave(v)):
 			continue
 		var mid := (v[0] + v[-1]) / 2.0
 		var d := absf(mid - centre)
@@ -76,6 +77,22 @@ static func place_root(chord: Theory.Chord, inversion: int, low: int, high: int,
 
 
 ## True if the chord can be played with its root in `octave` within range.
-static func fits_in_octave(chord: Theory.Chord, inversion: int, octave: int, low: int, high: int) -> bool:
+static func fits_in_octave(chord: Theory.Chord, inversion: int, octave: int, low: int, high: int, disabled: Array = []) -> bool:
 	var v := chord.voicing(midi_for(chord.root, octave), inversion)
-	return v[0] >= low and v[-1] <= high
+	return v[0] >= low and v[-1] <= high and not disabled.has(bass_octave(v))
+
+
+## Octave of a voicing's lowest note (C4 = middle C's octave).
+static func bass_octave(voicing: Array) -> int:
+	return floori(int(voicing.min()) / 12.0) - 1
+
+
+## Octaves a chord can start in on a keyboard [low, high]: those with a key
+## in range that still has room above for a triad.
+static func keyboard_octaves(low: int, high: int) -> Array[int]:
+	var out: Array[int] = []
+	for o in range(-1, 10):
+		var lo := 12 * (o + 1)
+		if lo + 11 >= low and maxi(low, lo) + 4 <= high:
+			out.append(o)
+	return out

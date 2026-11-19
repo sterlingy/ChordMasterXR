@@ -316,6 +316,26 @@ toggle_mode = true
 text = "Keys"
 metadata/setting = "show_keyboard_hint"
 
+[node name="HandlesToggle" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000190]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Show the drag handles on the keyboard overlay (headset only)"
+toggle_mode = true
+text = "Kbd handles"
+metadata/setting = "xr_kb_adjust"
+
+[node name="ResetChoices" type="Button" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000191]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(162, 52)
+theme_override_font_sizes/font_size = 19
+layout_mode = 2
+tooltip_text = "Put the floating answer buttons back in front of you, below the main window"
+text = "Reset answers"
+
 [node name="ActionBox" type="VBoxContainer" parent="Margin/Column/Middle/PromptCard/PromptButtons" unique_id=1700000005]
 unique_name_in_owner = true
 layout_mode = 2
@@ -498,6 +518,13 @@ layout_mode = 2
 tooltip_text = "Attack with the chords in your chord pool instead of each sector's chords"
 text = "Use my chord pool"
 metadata/setting = "defense_use_pool"
+
+[node name="DefenseInversions" type="CheckButton" parent="Margin/Column/DefenseBar" unique_id=1700000213]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Attackers ask for an inversion (right one: full points, another: half). Off: root position, any inversion counts"
+text = "Inversions"
+metadata/setting = "defense_inversions"
 
 [node name="Keyboard" type="Control" parent="Margin/Column" unique_id=991080209]
 unique_name_in_owner = true

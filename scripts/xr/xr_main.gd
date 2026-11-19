@@ -9,6 +9,8 @@ extends Node3D
 ## - Touch buttons directly with your index fingertip.
 ## - Pinch the bar under the panel to move it; pinch a corner ball to
 ##   resize it (directly with your hand or with the ray).
+## - "Name it": the answers float as 3D buttons within reach (point and
+##   pinch, or press one with a fingertip).
 ## - Chord Defense on the real keyboard: pinch the blue ball left of the
 ##   stations to slide the playfield (between games).
 
@@ -88,6 +90,18 @@ func _ready() -> void:
 		c.add_child(p)
 		pointers.append(p)
 
+	# "Name it" answers float in front of you instead of sitting on the panel.
+	screen.external_choices = true
+	screen._apply_display_settings()
+	var choice_buttons := XRChoiceButtons.new()
+	choice_buttons.session = screen.session
+	choice_buttons.camera = camera
+	choice_buttons.panel = panel
+	choice_buttons.origin = origin
+	add_child(choice_buttons)
+	for p in pointers:
+		p.grabbables.append(choice_buttons)    # its move knob
+
 	# Chord Defense: in the headset the game leaves the panel and sits on
 	# the real keyboard (once it is calibrated).
 	_defense = screen.get_node("%GameArea")
@@ -137,7 +151,7 @@ func _update_defense_ar() -> void:
 		var frame := DefenseGame.ar_frame(keyboard_overlay.layout,
 				int(Settings.get_value("range_low")), int(Settings.get_value("range_high")))
 		_field_handle.base = frame[0]
-		game.enter_ar(_field_handle.placed(), frame[1])
+		game.enter_ar(_field_handle.placed(), frame[1], frame[2])
 		_defense.set_ar(true)
 		_defense_cal = key
 	elif not want and game.in_ar:

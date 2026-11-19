@@ -38,6 +38,7 @@ const DEFAULTS := {
 	"random_inversions": true,     # in strict mode, ask for varied inversions
 	"octave_mode": false,
 	"target_octave": 4,            # -1 = random octave
+	"disabled_octaves": [],        # octaves the app won't put chords in (by their lowest note)
 	"advance_delay": 0.6,          # seconds after a correct answer
 	# Exercise
 	"exercise_type": "smart",
@@ -52,6 +53,7 @@ const DEFAULTS := {
 	# Chord Defense (game)
 	"player_name": "Player",       # shown on the leaderboards
 	"defense_use_pool": false,     # attack with my chord pool instead of the sectors' chords
+	"defense_inversions": true,    # attackers ask for an inversion (off: root position, any counts)
 	"leaderboard_url": "",         # global leaderboard endpoint ("" = local only)
 	"name_choices": 4,             # 3..5
 	"pool": {},                    # ChordPool.to_dict()
@@ -63,6 +65,7 @@ const DEFAULTS := {
 	"xr_kb_step": "normal",        # nudge step: "fine" | "normal" | "coarse"
 	"xr_keyboard_cal_base": null,  # calibration before any adjustments
 	"xr_panel_scale": 1.0,
+	"xr_choices_offset": [0.0, 0.0, 0.0], # "Name it" buttons moved by their knob (right, up, back; m)
 	"xr_field_offset": [0.0, 0.0, 0.0], # Chord Defense playfield moved by its handle (game frame, m)         # XR panel size multiplier (1.0 = 36 cm wide)
 }
 
@@ -140,3 +143,4 @@ func apply_to_engine(e: ExerciseEngine) -> void:
 	e.random_inversions = get_value("random_inversions")
 	e.octave_mode = get_value("octave_mode")
 	e.target_octave = get_value("target_octave")
+	e.disabled_octaves = (get_value("disabled_octaves") as Array).duplicate()

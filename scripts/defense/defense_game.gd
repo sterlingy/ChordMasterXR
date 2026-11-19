@@ -37,6 +37,9 @@ var paused := false
 var range_low := 48
 var range_high := 84
 var use_pool := false
+## Attackers ask for an inversion (Settings "defense_inversions"). Off:
+## all root position, and any inversion scores full points.
+var use_inversions := true
 var pool_entries: Array = []
 var stats: PracticeStats          # practice stats (optional; set by the screen)
 var records := DefenseRecords.new()
@@ -53,6 +56,8 @@ var streak := 0
 var best_combo := 0
 var kills := 0
 var misfires := 0
+var inv_right := 0               # kills in the inversion the ring asked for
+var inv_wrong := 0               # kills in another inversion (half points)
 var hits_taken := 0
 var spawned := 0
 var boss_spawned := false
@@ -62,6 +67,9 @@ var _intro_s := INTRO_S
 var _spawn_t := 0.0
 var _play_s := 0.0
 var _hint_key := ""
+## Keys hint: the attacker shown on the keyboard. Once picked (the closest
+## one), it stays until it is destroyed or reaches its station.
+var _hint_target: DefenseAttacker = null
 var show_notes := false
 var show_hints := false
 
@@ -71,12 +79,17 @@ var camera: Camera3D
 var _backdrop: Node3D          # desktop-only sky, stars, grid, camera
 ## AR: station x positions measured from the real keyboard ([] = even spacing).
 var station_xs: Array[float] = []
+## Lane width: a little under an octave on desktop; exactly one octave of
+## the real keyboard in AR.
+const DESKTOP_LANE_W := 0.15
+var lane_width := DESKTOP_LANE_W
 var in_ar := false
 var _world_env: WorldEnvironment
 var _grid_mat: StandardMaterial3D
 var _nebulae: Array[MeshInstance3D] = []
 var _stars: MultiMeshInstance3D
 var _field: Node3D            # stations + lanes + attackers live here
+var _ar_key: Node3D           # AR: inversion colour key beside the stations
 var _fx: Node3D
 
 
@@ -91,6 +104,10 @@ func _ready() -> void:
 	add_child(leaderboard)
 	if desktop_view:
 		_build_backdrop()
+	use_inversions = bool(Settings.get_value("defense_inversions"))
+	Settings.changed.connect(func(key: String):
+		if key == "defense_inversions":
+			set_use_inversions(bool(Settings.get_value(key))))
 	Midi.note_on.connect(_on_note_on)
 	Midi.held_changed.connect(_on_held_changed)
 	get_viewport().size_changed.connect(_place_camera)
@@ -114,7 +131,7 @@ func configure(low: int, high: int) -> void:
 	for i in n:
 		var st := DefenseStation.new()
 		var hue := 0.58 - 0.5 * (float(i) / maxf(1.0, n - 1.0))
-		st.setup(octaves[i], Color.from_hsv(fposmod(hue, 1.0), 0.55, 1.0), FIELD_DEPTH)
+		st.setup(octaves[i], Color.from_hsv(fposmod(hue, 1.0), 0.55, 1.0), FIELD_DEPTH, lane_width)
 		st.position = Vector3(station_x(i), 0, 0)
 		_field.add_child(st)
 		stations.append(st)
@@ -131,8 +148,10 @@ func station_x(i: int) -> float:
 
 ## AR: put the game on the real keyboard. `xform` is the game frame (x along
 ## the keys, y up, −z away from the player); `xs` the station x positions
-## in that frame, one per station octave.
-func enter_ar(xform: Transform3D, xs: Array[float]) -> void:
+## in that frame, one per station octave; `octave_w` one octave of the real
+## keyboard (the lane width).
+func enter_ar(xform: Transform3D, xs: Array[float], octave_w := OCTAVE_W) -> void:
+	lane_width = octave_w
 	in_ar = true
 	if _backdrop:
 		_backdrop.queue_free()
@@ -146,11 +165,14 @@ func enter_ar(xform: Transform3D, xs: Array[float]) -> void:
 	else:
 		for i in stations.size():
 			stations[i].position.x = station_x(i)
+			stations[i].set_lane_width(lane_width)
+	_build_ar_key()
 
 
-## Game frame on a calibrated real keyboard: [Transform3D, station xs].
-## Stations sit just behind the white keys, one centred over each octave;
-## x runs along the keys (low → high), y up, −z away from the player.
+## Game frame on a calibrated real keyboard: [Transform3D, station xs,
+## octave width]. Stations sit just behind the white keys, one centred over
+## each octave's seven white keys (so lanes one octave wide meet edge to
+## edge); x runs along the keys (low → high), y up, −z away from the player.
 static func ar_frame(lay: KeyboardLayout, low: int, high: int) -> Array:
 	var ax := lay.axes()
 	var along: Vector3 = ax[0]
@@ -160,6 +182,8 @@ static func ar_frame(lay: KeyboardLayout, low: int, high: int) -> Array:
 	var row := lay.mid() + back * behind + up * 0.005
 	var centres := {}
 	for k in lay.keys():
+		if not k["white"]:
+			continue
 		var o := DefenseRules.octave_of(int(k["midi"]))
 		if not centres.has(o):
 			centres[o] = []
@@ -172,11 +196,58 @@ static func ar_frame(lay: KeyboardLayout, low: int, high: int) -> Array:
 			c += p
 		c /= maxf(1.0, float(pts.size()))
 		xs.append((c - row).dot(along))
-	return [Transform3D(Basis(along, up, -back), row), xs]
+	return [Transform3D(Basis(along, up, -back), row), xs, lay.white_width() * 7.0]
+
+
+## AR: the pin colour key lies on the table right of the highest station,
+## tilted like the station labels so it reads from above.
+func _build_ar_key() -> void:
+	if _ar_key:
+		_ar_key.queue_free()
+		_ar_key = null
+	if not use_inversions:
+		return
+	_ar_key = Node3D.new()
+	add_child(_ar_key)
+	var x := (station_x(octaves.size() - 1) if not octaves.is_empty() else 0.0) + lane_width * 0.5 + 0.06
+	_ar_key.position = Vector3(x, 0.004, 0.02)
+	var rows := [["INVERSION", Color(0.85, 0.88, 1.0)]]
+	for i in 4:
+		rows.append(["● " + ["root", "1st", "2nd", "3rd"][i], DefenseAttacker.inversion_color(i)])
+	for k in rows.size():
+		var l := Label3D.new()
+		l.font = UITheme.ui_font()
+		l.text = rows[k][0]
+		l.font_size = 48
+		l.pixel_size = 0.0006
+		l.outline_size = 10
+		l.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
+		l.modulate = rows[k][1]
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		l.no_depth_test = true
+		l.rotation_degrees = Vector3(-60, 0, 0)
+		# First row farthest away: it reads top-down from above.
+		l.position = Vector3(0, 0, -0.05 * (rows.size() - 1 - k))
+		_ar_key.add_child(l)
+
+
+## Turns inversions on/off. New attackers follow at once; the start-screen
+## samples and the AR colour key update.
+func set_use_inversions(on: bool) -> void:
+	use_inversions = on
+	if in_ar:
+		_build_ar_key()
+	if state == State.IDLE or state == State.OVER:
+		if not is_running() and _showcase.size() > 0:
+			show_showcase()
 
 
 func exit_ar() -> void:
 	in_ar = false
+	lane_width = DESKTOP_LANE_W
+	if _ar_key:
+		_ar_key.queue_free()
+		_ar_key = null
 	station_xs.clear()
 	transform = Transform3D.IDENTITY
 	if desktop_view and _backdrop == null:
@@ -184,11 +255,24 @@ func exit_ar() -> void:
 	configure(range_low, range_high)
 
 
+## Stations still standing in enabled octaves (Settings "disabled_octaves"):
+## only these are attacked, and the game ends when none are left.
 func _alive_stations() -> Array[int]:
+	var off: Array = Settings.get_value("disabled_octaves")
 	var out: Array[int] = []
 	for i in stations.size():
-		if stations[i].alive:
+		if stations[i].alive and not off.has(octaves[i]):
 			out.append(i)
+	if out.is_empty() and not off.is_empty():
+		# Every enabled octave lost (or none has a station): fall back to all.
+		var any_enabled := false
+		for o in octaves:
+			if not off.has(o):
+				any_enabled = true
+		if not any_enabled:
+			for i in stations.size():
+				if stations[i].alive:
+					out.append(i)
 	return out
 
 
@@ -207,6 +291,8 @@ func start(first_wave := 1) -> void:
 	best_combo = 0
 	kills = 0
 	misfires = 0
+	inv_right = 0
+	inv_wrong = 0
 	hits_taken = 0
 	kill_ms.clear()
 	_play_s = 0.0
@@ -239,7 +325,8 @@ func _next_wave() -> void:
 	state = State.INTRO
 	_state_t = 0.0
 	_spawn_t = 0.0
-	var sub := "Play each chord with its lowest note in the octave it attacks"
+	var sub := "Play each chord in the octave it attacks, in the inversion on its pin" if use_inversions \
+			else "Play each chord with its lowest note in the octave it attacks"
 	if plan["special"] != "":
 		sub = DefenseWaves.SPECIAL_TEXT[plan["special"]]
 	if plan["boss"]:
@@ -254,7 +341,7 @@ func _next_wave() -> void:
 			var c := Theory.make_chord("C", q)
 			syms.append(c.pretty())
 			names.append(Theory.QUALITIES[q]["spoken"])
-		show_showcase(syms)
+		show_showcase(syms, [])
 		sub = "New chords: " + ", ".join(names)
 		_intro_s = INTRO_S + 2.5
 	banner.emit("Wave %d · %s" % [wave, plan["sector"]], sub)
@@ -336,6 +423,7 @@ func _end_game() -> void:
 		"name": str(Settings.get_value("player_name")), "score": score, "wave": wave, "kills": kills,
 		"misfires": misfires, "hits_taken": hits_taken, "accuracy": acc, "best_combo": best_combo,
 		"avg_ms": avg, "fastest_ms": fastest, "play_s": _play_s, "stations": stations.size(),
+		"inv_right": inv_right, "inv_wrong": inv_wrong, "inversions": use_inversions,
 	}
 	summary["rank"] = records.add_game(stations.size(), summary)
 	summary["nemesis"] = records.nemesis_chords(3)
@@ -356,14 +444,19 @@ var _showcase: Array[DefenseAttacker] = []
 
 
 ## Before a game: a row of sample ships so the player can learn the
-## silhouettes (C, Cm, Cdim, Caug, C7, Cmaj7, Cm7).
-func show_showcase(syms: Array = ["C", "Cm", "Cdim", "Caug", "C7", "Cmaj7", "Cm7"]) -> void:
+## inversion rings (C in root position, 1st and 2nd inversion; G7 in 3rd).
+## `invs`: inversion per ship (default root position).
+func show_showcase(syms: Array = ["C", "C", "C", "G7"], invs: Array = [0, 1, 2, 3]) -> void:
+	if not use_inversions and invs == [0, 1, 2, 3]:
+		# No inversions: show a few chord types in root position instead.
+		syms = ["C", "Cm", "G7", "Am7"]
+		invs = []
 	_clear_showcase()
 	var span := minf(0.92, 0.16 * (syms.size() - 1))
 	for i in syms.size():
 		var a := DefenseAttacker.new()
 		_field.add_child(a)
-		a.setup("drifter", [Theory.parse_chord(syms[i])], 0, 0.0, 99.0, rng)
+		a.setup("drifter", [Theory.parse_chord(syms[i])], 0, 0.0, 99.0, rng, [invs[i] if i < invs.size() else 0])
 		# Alternate heights so neighbouring plates don't touch.
 		var f := 0.5 if syms.size() == 1 else float(i) / (syms.size() - 1)
 		a.position = Vector3(lerpf(-span * 0.5, span * 0.5, f), 0.075 + 0.045 * (i % 2), -0.1)
@@ -476,7 +569,7 @@ func _spawn_special(special: String) -> int:
 			var start: int = rng.randi_range(0, maxi(0, stations.size() - 3))
 			var n := 0
 			for si in range(start, mini(start + 3, stations.size())):
-				if stations[si].alive:
+				if _alive_stations().has(si):
 					var c := _random_chord(plan["qualities"], octaves[si])
 					if c:
 						_add_attacker("drifter", [c], si, travel)
@@ -518,7 +611,10 @@ func _add_attacker(kind: String, cs: Array, si: int, travel: float) -> void:
 	var a := DefenseAttacker.new()
 	_field.add_child(a)
 	a.show_notes = show_notes
-	a.setup(kind, cs, si, station_x(si), travel, rng)
+	var invs := []
+	for c in cs:
+		invs.append(DefenseRules.pick_inversion(c, octaves[si], range_high, rng) if use_inversions else 0)
+	a.setup(kind, cs, si, station_x(si), travel, rng, invs)
 	a.set_path(-FIELD_DEPTH, TOP_Y, rng)
 	a.spawned_ms = _ms()
 	a.reached_station.connect(_on_reached)
@@ -534,7 +630,7 @@ func _jump(a: DefenseAttacker) -> void:
 	var options: Array[int] = []
 	for i in alive:
 		if i != a.station and absi(i - a.station) <= 2 \
-				and not DefenseRules.voicing_in_octave(a.chord(), octaves[i], range_high).is_empty():
+				and not DefenseRules.voicing_in_octave(a.chord(), octaves[i], range_high, a.inversion(), true).is_empty():
 			options.append(i)
 	if options.is_empty():
 		return
@@ -611,7 +707,7 @@ func _on_note_on(_pitch: int, _velocity: int) -> void:
 	var r := DefenseRules.judge(held, _targets())
 	match r["kind"]:
 		"kill":
-			_kill(instance_from_id(r["id"]) as DefenseAttacker)
+			_kill(instance_from_id(r["id"]) as DefenseAttacker, held)
 		"wrong_octave":
 			var a := instance_from_id(r["id"]) as DefenseAttacker
 			misfires += 1
@@ -640,11 +736,20 @@ func _on_held_changed(held: Array) -> void:
 			a.show_held({})
 
 
-func _kill(a: DefenseAttacker) -> void:
+func _kill(a: DefenseAttacker, held: Array = []) -> void:
 	if a == null or a.dead:
 		return
 	var ms := _ms() - a.spawned_ms
-	var pts := DefenseRules.kill_points(a.chord(), a.t, streak)
+	# Right inversion: full points. Another inversion still destroys it,
+	# for half the points and a duller, broken-ring effect.
+	var played := DefenseRules.held_inversion(held, a.chord()) if not held.is_empty() else a.inversion()
+	var right := played == a.inversion() or not use_inversions
+	if use_inversions:
+		if right:
+			inv_right += 1
+		else:
+			inv_wrong += 1
+	var pts := DefenseRules.kill_points(a.chord(), a.t, streak, right)
 	score += pts
 	streak += 1
 	best_combo = maxi(best_combo, streak)
@@ -658,12 +763,31 @@ func _kill(a: DefenseAttacker) -> void:
 	sfx.play("boom", -6.0)
 	_beam(st.global_position + Vector3(0, 0.03, 0), a.global_position, a.orb_colors())
 	var mult := DefenseRules.combo_multiplier(streak)
-	_pop_text("+%d" % pts, a.global_position, Color(1, 0.9, 0.4) if mult > 1 else Color(0.6, 1, 0.7))
 	var mult_text := "   ×%d" % mult if mult > 1 else ""
+	var at := a.global_position
+	var ring_col := DefenseAttacker.inversion_color(a.inversion())
+	var ring_r := a.ring_radius()
+	var colors := a.orb_colors()
+	var fb_col := Color(0.4, 1, 0.6)
+	var inv_note := ""
+	if right:
+		_pop_text("+%d" % pts, at, Color(1, 0.9, 0.4) if mult > 1 else Color(0.6, 1, 0.7))
+	else:
+		_pop_text("½  +%d" % pts, at, Color(1, 0.62, 0.3))
+		var wanted := Theory.inversion_name(a.inversion()) if a.inversion() > 0 else "root position"
+		var got := Theory.inversion_name(played) if played > 0 else "root position"
+		inv_note = " — wrong inversion (wanted %s, played %s): half points" % [wanted, got]
+		fb_col = Color(1, 0.7, 0.35)
+	# Right inversion: bright explosion. Wrong: the ring shatters.
+	var burst := func(size: float) -> void:
+		if right:
+			_explode(at, colors, size)
+		else:
+			_shatter(at, ring_col, ring_r)
 	if a.kind == "boss":
-		_explode(a.global_position, a.orb_colors(), 0.8)
+		burst.call(0.8)
 		if not a.next_segment():
-			feedback.emit("%s down! Next: %s  +%d%s" % [a.chords[a.segment - 1].pretty(), a.chord().pretty(), pts, mult_text], Color(0.4, 1, 0.6))
+			feedback.emit("%s down%s! Next: %s  +%d%s" % [a.chords[a.segment - 1].pretty(), inv_note, a.chord().pretty(), pts, mult_text], fb_col)
 			_emit_hud()
 			return
 		score += 1000
@@ -671,11 +795,11 @@ func _kill(a: DefenseAttacker) -> void:
 		for c in a.chords:
 			notes.append(DefenseRules.voicing_in_octave(c, octaves[a.station], range_high)[0])
 		sfx.fanfare(notes)
-		feedback.emit("Progression ship destroyed!  +%d" % (pts + 1000), Color(0.4, 1, 0.6))
-		_explode(a.global_position, a.orb_colors() + [Color(1, 1, 1)], 2.2)
+		feedback.emit("Progression ship destroyed!  +%d%s" % [pts + 1000, inv_note], fb_col)
+		_explode(at, colors + [Color(1, 1, 1)], 2.2)
 	else:
-		feedback.emit("%s  +%d%s" % [a.chord().pretty(), pts, mult_text], Color(0.4, 1, 0.6))
-		_explode(a.global_position, a.orb_colors(), 1.0)
+		feedback.emit("%s  +%d%s%s" % [a.chord().pretty(), pts, mult_text, inv_note], fb_col)
+		burst.call(1.0)
 	a.dead = true
 	attackers.erase(a)
 	a.queue_free()
@@ -695,16 +819,25 @@ func _update_threats() -> void:
 			top = a
 	for i in stations.size():
 		stations[i].set_threat(threat[i])
+	var training: bool = int(records.lifetime["games"]) == 0 and wave == 1
+	var hinting := show_hints or training
+	# Keys hint sticks to one attacker until it's gone, then takes the
+	# closest one; the target ring marks whichever chord the keys show.
+	if not hinting:
+		_hint_target = null
+	elif not hint_target_alive():
+		_hint_target = top
+	var focus: DefenseAttacker = _hint_target if hinting and _hint_target else top
 	for a in attackers:
-		a.set_urgency(a.t, a == top)
+		a.set_urgency(a.t, a == focus)
 	_declutter_plates()
 	var key := ""
 	var v: Array = []
-	var training: bool = int(records.lifetime["games"]) == 0 and wave == 1
-	if top and (show_hints or training):
-		key = "%s@%d" % [top.chord().key(), top.station]
+	if hinting and _hint_target:
+		var h := _hint_target
+		key = "%s@%d:%d#%d" % [h.chord().key(), h.station, h.inversion(), h.get_instance_id()]
 		if key != _hint_key:
-			v = DefenseRules.voicing_in_octave(top.chord(), octaves[top.station], range_high)
+			v = DefenseRules.voicing_in_octave(h.chord(), octaves[h.station], range_high, h.inversion())
 	if key != _hint_key:
 		_hint_key = key
 		hint_changed.emit(v)
@@ -754,6 +887,11 @@ func set_show_notes(on: bool) -> void:
 	show_notes = on
 	for a in attackers:
 		a.set_show_notes(on)
+
+
+func hint_target_alive() -> bool:
+	return _hint_target != null and is_instance_valid(_hint_target) \
+			and not _hint_target.dead and attackers.has(_hint_target)
 
 
 func set_show_hints(on: bool) -> void:
@@ -849,6 +987,31 @@ func _explode(at: Vector3, colors: Array, size := 1.0) -> void:
 	tw.chain().tween_callback(func():
 		ring.queue_free()
 		p.queue_free())
+
+
+## Wrong-inversion kill: the ring cracks into dull shards that drift apart
+## and fade, with a few grey sparks (no bright explosion).
+func _shatter(at: Vector3, color: Color, r: float) -> void:
+	var dull := color.lerp(Color(0.55, 0.55, 0.6), 0.55)
+	var n := 8
+	for i in n:
+		var ang := TAU * (i + 0.5) / n
+		var shard := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(TAU * r / n * 0.8, r * 0.16, r * 0.08)
+		shard.mesh = bm
+		var m := DefenseAttacker._flat(Color(dull, 0.9))
+		shard.material_override = m
+		_fx.add_child(shard)
+		var out := Vector3(cos(ang), sin(ang), 0.0)
+		shard.global_position = at + out * r
+		shard.rotation.z = ang + PI / 2
+		var tw := create_tween().set_parallel()
+		tw.tween_property(shard, "global_position", at + out * r * 1.9 + Vector3.DOWN * r * 0.8, 0.6).set_ease(Tween.EASE_OUT)
+		tw.tween_property(shard, "rotation:z", shard.rotation.z + randf_range(-1.5, 1.5), 0.6)
+		tw.tween_property(m, "albedo_color:a", 0.0, 0.6)
+		tw.chain().tween_callback(shard.queue_free)
+	_explode(at, [Color(0.6, 0.6, 0.65), dull], 0.45)
 
 
 ## Floating score text that rises and fades where a chord was destroyed.

@@ -30,7 +30,7 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 			else:
 				s.prompt.inversion = 1
 			screen._refresh_prompt_view()
-		"defense", "defense_kill", "defense_over", "defense_notes":
+		"defense", "defense_kill", "defense_kill_wrong", "defense_over", "defense_notes":
 			Settings.set_value("range_low", 36)
 			Settings.set_value("range_high", 96)
 			Settings.set_value("show_notes", script_name == "defense_notes")
@@ -47,6 +47,8 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 				g.score = 12450
 				g.wave = 7
 				g.kills = 38
+				g.inv_right = 31
+				g.inv_wrong = 7
 				g.misfires = 5
 				g.best_combo = 14
 				g.kill_ms.assign([2100, 3400, 1800, 5200])
@@ -57,14 +59,27 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 				return
 			await tree.create_timer(2.6 + 9.0).timeout
 			print("DEV attackers=", g.attackers.size(), " state=", g.state)
-			if script_name == "defense_kill" and not g.attackers.is_empty():
+			if script_name in ["defense_kill", "defense_kill_wrong"] and not g.attackers.is_empty():
 				var a: DefenseAttacker = g.attackers[0]
-				var v := DefenseRules.voicing_in_octave(a.chord(), g.octaves[a.station], g.range_high)
+				if script_name == "defense_kill_wrong":
+					for cand in g.attackers:
+						if DefenseRules.playable_inversions(cand.chord(), g.octaves[cand.station], g.range_high).size() > 1:
+							a = cand
+							break
+				var inv := a.inversion()
+				if script_name == "defense_kill_wrong":
+					# Any other playable inversion: half points, shattered ring.
+					for i in DefenseRules.playable_inversions(a.chord(), g.octaves[a.station], g.range_high):
+						if i != a.inversion():
+							inv = i
+							break
+				var v := DefenseRules.voicing_in_octave(a.chord(), g.octaves[a.station], g.range_high, inv, script_name == "defense_kill_wrong")
+				print("DEV asked inv ", a.inversion(), " playing inv ", inv)
 				print("DEV playing ", a.chord().pretty(), " ", v, " for octave ", g.octaves[a.station])
 				for m in v:
 					Midi.inject_note_on(m)
 				await tree.create_timer(0.12).timeout
-				print("DEV kills=", g.kills, " score=", g.score)
+				print("DEV kills=", g.kills, " score=", g.score, " inv right/wrong=", g.inv_right, "/", g.inv_wrong)
 				for m in v:
 					Midi.inject_note_off(m)
 				await tree.create_timer(0.1).timeout
@@ -110,7 +125,7 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 							continue
 						top = others[0]
 				var miss := rng.randf() < (0.08 if script_name == "defense_boss" else 0.25)
-				var v := DefenseRules.voicing_in_octave(top.chord(), g.octaves[top.station], g.range_high)
+				var v := DefenseRules.voicing_in_octave(top.chord(), g.octaves[top.station], g.range_high, top.inversion())
 				if miss:
 					v = [v[0], v[0] + 1, v[0] + 2]
 				for m in v:
@@ -146,7 +161,7 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 			screen._set_paused(true)
 			var t0 := a.t
 			await tree.create_timer(1.5).timeout
-			var v := DefenseRules.voicing_in_octave(a.chord(), g.octaves[a.station], g.range_high)
+			var v := DefenseRules.voicing_in_octave(a.chord(), g.octaves[a.station], g.range_high, a.inversion())
 			for m in v:
 				Midi.inject_note_on(m)
 			await tree.process_frame
@@ -337,6 +352,59 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 			for m in [60, 64, 67]:
 				Midi.handle_message(0, MIDI_MESSAGE_NOTE_OFF, m, 0)
 			print("DEV packets sent: ", Midi.net.packets_sent, "  status: ", Midi.net.status_text())
+		"xr_choices", "xr_choices_answered":
+			# Desktop preview of the floating "Name it" buttons (XR), seen
+			# from the player's eyes; fingertip pokes are simulated.
+			Settings.set_value("practice_mode", "name")
+			Settings.set_value("name_choices", 4)
+			Settings.set_value("play_on_prompt", true)
+			screen._apply_display_settings()
+			await tree.create_timer(0.3).timeout
+			screen.visible = false
+			var world := Node3D.new()
+			tree.root.add_child(world)
+			var env := WorldEnvironment.new()
+			env.environment = Environment.new()
+			env.environment.background_mode = Environment.BG_COLOR
+			env.environment.background_color = Color(0.2, 0.21, 0.24)
+			world.add_child(env)
+			var cam := Camera3D.new()
+			world.add_child(cam)
+			cam.position = Vector3(0, 1.5, 0)
+			cam.look_at(Vector3(0, 1.22, -0.46))
+			cam.fov = 70
+			cam.current = true
+			var cb := XRChoiceButtons.new()
+			cb.session = s
+			cb.camera = cam
+			world.add_child(cb)
+			s.next()
+			await tree.create_timer(0.6).timeout
+			print("DEV buttons ", cb.buttons.size(), " answer ", s.prompt.chord.pretty(),
+					" chord played: ", s._chord_played_ms > 0, " (", s.prompt.voicing(), ")")
+			if cb.buttons.is_empty():
+				return
+			var right: XRChoiceButton = null
+			var wrong: XRChoiceButton = null
+			for b in cb.buttons:
+				if b.chord.equals(s.prompt.chord):
+					right = b
+				elif wrong == null:
+					wrong = b
+			if script_name == "xr_choices":
+				cb.poke("right", wrong.to_global(Vector3(0, 0, 0.02)))   # hover only
+				print("DEV hover ", wrong.hovered, " state ", wrong.state)
+			else:
+				# Poke the wrong one (approach from the front, push through).
+				for z in [0.03, 0.015, 0.0, -0.01]:
+					cb.poke("right", wrong.to_global(Vector3(0, 0, z)))
+				cb.poke("right", null)
+				await tree.create_timer(0.3).timeout
+				# Show the "found it" look without letting the session move on.
+				right.show_result(true)
+				cb._on_feedback(right.chord, true)
+				print("DEV wrong ", wrong.state, " right ", right.state)
+			await tree.create_timer(0.4 if script_name == "xr_choices" else 0.2).timeout
 		"defense_ar_left", "defense_ar_right":
 			# Desktop preview of Chord Defense placed on a calibrated real
 			# keyboard (as in XR), seen from the left or right of the player.
@@ -367,7 +435,7 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 			g.desktop_view = false
 			world.add_child(g)
 			var frame := DefenseGame.ar_frame(ov.layout, 36, 96)
-			g.enter_ar(frame[0], frame[1])
+			g.enter_ar(frame[0], frame[1], frame[2])
 			g.set_show_notes(true)
 			g.show_showcase()
 			await tree.create_timer(0.8).timeout

@@ -1,13 +1,15 @@
 class_name DefenseAttacker
 extends Node3D
-## One attacking chord. Its hull is the chord's shape on the 12-note
-## circle (root at the top), so every chord quality has its own silhouette:
-## major and minor triads are mirror images, augmented is an equilateral
-## triangle, dim7 is a square. A glowing orb sits on each chord tone,
-## coloured by its job in the chord, and lights up while you hold that
-## note. Hull and plates hold a fixed orientation in the playfield (facing
-## the player's side, tipped back to read from above); plates are drawn on
-## top.
+## One attacking chord, drawn as a glossy map pin (an inverted teardrop):
+## the chord name in the round head, the inversion number (1, 2, 3 ...) in
+## the narrow tip; root position leaves the tip empty. The pin's colour is
+## the inversion to play (INVERSION_COLORS). It brightens as you hold more
+## of the chord's tones, and its rim turns orange, then red, as it closes
+## in. The pin and note plates hold a fixed orientation in the playfield
+## (facing the player's side, tipped back to read from above).
+##
+## The pin grows with distance (never smaller than its real size up close)
+## so the name stays readable at the far end of the lanes.
 ##
 ## Movement is a progress value t (0 = just arrived, 1 = hits its station)
 ## along a path that depends on `kind`. The game owns lanes/stations and
@@ -22,9 +24,29 @@ const PLATE_PX := 0.0014
 ## Fixed pitch for hull and plates: faces the player, top tipped away so
 ## it reads from above (the player looks down at the keyboard).
 const FACE_PITCH_DEG := -35.0
+## The pin keeps its real size up to this distance, then grows with
+## distance (like a fixed-size label), up to RING_MAX_SCALE.
+const RING_REF_DIST := 0.8
+const RING_MAX_SCALE := 2.2
+## Pin shape, relative to `radius`: the round head's radius, and how far
+## below the head's centre the tip is (in head radii).
+const PIN_HEAD := 1.35
+const PIN_TIP := 1.9
+## Text sizes in head radii: the name's em height, the number's.
+const NAME_EM := 0.9
+const NUM_EM := 0.62
+## Pin colour per inversion: root, 1st, 2nd, 3rd, 4th.
+const INVERSION_COLORS := [
+	Color(0.35, 0.82, 1.0),    # root position: sky blue
+	Color(1.0, 0.78, 0.25),    # 1st: gold
+	Color(1.0, 0.42, 0.78),    # 2nd: pink
+	Color(0.55, 1.0, 0.45),    # 3rd: lime
+	Color(0.75, 0.55, 1.0),    # 4th: violet
+]
 
 var kind := "drifter"
 var chords: Array = []              # Theory.Chord; bosses carry several
+var inversions: Array[int] = []     # inversion to play each chord in (0 = root)
 var segment := 0                    # boss: which chord is current
 var station := 0                    # index of the station it attacks
 var t := 0.0                        # 0..1 progress to the station
@@ -45,9 +67,73 @@ var _jumps: Array = []              # t values where a jumper changes lane
 var _clock := 0.0
 var _spin := 0.0
 
-var _hull: Node3D
-var _orbs := {}                     # pc -> MeshInstance3D
-var _orb_mats := {}                 # pc -> StandardMaterial3D
+var _hull: Node3D                   # fixed tilt; scaled with distance
+var _core: Node3D                   # bob + warp-in scale
+var _pin_mat: ShaderMaterial
+var _name_label: Label3D
+var _inv_label: Label3D
+var _held_frac := 0.0
+var _vis := 1.0                     # current distance scale of the pin
+var _pin_s := 1.0                   # urgency scale of the pin
+var _rim := Color.WHITE             # rim colour (white -> orange -> red)
+
+const PIN_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
+
+uniform vec2 quad_size;
+uniform float center_y;          // head centre, measured from the quad centre
+uniform float head_r;
+uniform float tip_d;             // tip distance below the head centre
+uniform vec4 fill : source_color;
+uniform vec4 rim : source_color;
+uniform float lift = 0.0;        // 0..1 brighten (notes held)
+uniform float alpha = 1.0;
+
+float sd_pin(vec2 p) {
+	// Uneven capsule: head circle at the origin, a tiny round tip below.
+	float r1 = head_r;
+	float r2 = head_r * 0.05;
+	float h = tip_d - r2;
+	vec2 q = vec2(abs(p.x), -p.y);
+	float b = (r1 - r2) / h;
+	float a = sqrt(1.0 - b * b);
+	float k = dot(q, vec2(-b, a));
+	if (k < 0.0) return length(q) - r1;
+	if (k > a * h) return length(q - vec2(0.0, h)) - r2;
+	return dot(q, vec2(a, b)) - r1;
+}
+
+void fragment() {
+	vec2 p = (UV - 0.5) * quad_size;
+	p.y = -p.y;
+	p.y -= center_y;
+	float d = sd_pin(p);
+	float aa = max(fwidth(d), 1e-5);
+	float inside = 1.0 - smoothstep(-aa, aa, d);
+	// Body: bright core below the head's centre, deep edges.
+	vec3 base = fill.rgb;
+	vec3 light = mix(base, vec3(1.0), 0.18);
+	vec3 dark = base * 0.24;
+	float t = clamp(length(p - vec2(0.0, -0.2 * head_r)) / (1.45 * head_r), 0.0, 1.0);
+	vec3 col = mix(light, dark, pow(t, 0.9));
+	col = mix(col, light, lift * 0.55);
+	// Glossy highlight across the top of the head.
+	vec2 e = (p - vec2(0.0, 0.42 * head_r)) / vec2(0.74 * head_r, 0.44 * head_r);
+	float hl = (1.0 - smoothstep(0.82, 1.0, length(e)));
+	hl *= 0.12 + 0.38 * clamp((p.y - 0.15 * head_r) / (0.7 * head_r), 0.0, 1.0);
+	col += vec3(hl);
+	// White rim.
+	float bw = 0.09 * head_r;
+	float edge = smoothstep(-bw - aa, -bw + aa, d);
+	col = mix(col, rim.rgb, edge);
+	// Soft shadow outside.
+	float sh = (1.0 - inside) * exp(-max(d, 0.0) / (0.07 * head_r)) * 0.4;
+	ALBEDO = mix(vec3(0.0), col, inside);
+	ALPHA = max(inside, sh) * alpha;
+}
+"""
+static var _pin_shader: Shader
 var _plate: Label3D
 var _notes_plate: Label3D
 var _next_plate: Label3D
@@ -59,44 +145,31 @@ var show_notes := false
 var urgent := false
 
 
-static func family_color(quality: String) -> Color:
-	match quality:
-		"maj", "6", "maj7", "add9", "maj9":
-			return Color(0.25, 0.9, 0.75)
-		"min", "m6", "m7", "m9", "mmaj7":
-			return Color(0.5, 0.55, 1.0)
-		"7", "9", "7sus4":
-			return Color(1.0, 0.75, 0.25)
-		"dim", "m7b5", "dim7":
-			return Color(1.0, 0.3, 0.38)
-		"aug":
-			return Color(1.0, 0.5, 0.15)
-		"sus2", "sus4":
-			return Color(0.65, 0.95, 1.0)
-	return Color(0.8, 0.8, 0.9)
+static func inversion_color(inv: int) -> Color:
+	return INVERSION_COLORS[clampi(inv, 0, INVERSION_COLORS.size() - 1)]
 
 
-## Colour of a chord tone by its interval above the root.
-static func role_color(semis: int) -> Color:
-	match posmod(semis, 12):
-		0: return Color(1, 1, 1)                 # root
-		3: return Color(0.35, 0.55, 1.0)         # minor 3rd
-		4: return Color(0.35, 1.0, 0.5)          # major 3rd
-		7: return Color(0.75, 0.45, 1.0)         # 5th
-		6, 8: return Color(1.0, 0.55, 0.2)       # altered 5th
-		9: return Color(0.55, 0.95, 0.45)        # 6th / dim 7th
-		10, 11: return Color(1.0, 0.85, 0.25)    # 7th
-		2, 5: return Color(0.4, 0.95, 1.0)       # 9th / sus
-	return Color(0.9, 0.9, 0.9)
+## Text inside the ring: nothing for root position, else the number.
+static func inversion_text(inv: int) -> String:
+	return "" if inv <= 0 else str(inv)
 
 
 func chord() -> Theory.Chord:
 	return chords[mini(segment, chords.size() - 1)]
 
 
-func setup(p_kind: String, p_chords: Array, p_station: int, p_lane_x: float, p_travel: float, rng: RandomNumberGenerator) -> void:
+## The inversion the current chord should be played in (0 = root).
+func inversion() -> int:
+	var i := mini(segment, chords.size() - 1)
+	return inversions[i] if i < inversions.size() else 0
+
+
+func setup(p_kind: String, p_chords: Array, p_station: int, p_lane_x: float, p_travel: float, rng: RandomNumberGenerator, p_inversions: Array = []) -> void:
 	kind = p_kind
 	chords = p_chords
+	inversions.clear()
+	for i in chords.size():
+		inversions.append(int(p_inversions[i]) if i < p_inversions.size() else 0)
 	station = p_station
 	travel = p_travel
 	lane_x = p_lane_x
@@ -131,23 +204,50 @@ func set_path(far_z: float, top_y: float, rng: RandomNumberGenerator) -> void:
 	position = start_pos
 
 
-## The hull has a fixed orientation (FACE_PITCH_DEG, root at the top), so
-## the chord's silhouette reads the same everywhere and never turns (major
-## and minor are mirror images; turning would blur that). A gentle bob
+## The ring has a fixed orientation (FACE_PITCH_DEG) and never turns. It
+## grows with distance to keep pace with the fixed-size name; a gentle bob
 ## keeps it alive.
 func _process(_delta: float) -> void:
 	if _hull == null:
 		return
 	var bob := sin(Time.get_ticks_msec() / 1000.0 * 2.2 + _spin * 10.0) * radius * 0.12
-	_hull.position.y = bob
+	_core.position.y = bob
+	var cam := get_viewport().get_camera_3d()
+	var v := 1.0
+	if cam:
+		v = clampf(cam.global_position.distance_to(global_position) / RING_REF_DIST, 1.0, RING_MAX_SCALE)
+	if absf(v - _vis) > 0.002:
+		_vis = v
+		_apply_scale()
+
+
+func _apply_scale() -> void:
+	_hull.scale = Vector3.ONE * _vis * _pin_s
+	_place_plates()
+
+
+## Radius of the pin's round head as drawn right now (metres).
+func ring_radius() -> float:
+	return radius * PIN_HEAD * _vis * _pin_s
+
+
+func _place_plates() -> void:
+	var below := -ring_radius() * (PIN_TIP + 0.05) - 0.006
+	if _plate:
+		_plate.position.y = ring_radius() * 1.08 + 0.012 + plate_lift
+	if _notes_plate:
+		_notes_plate.position.y = below
+	if _next_plate:
+		_next_plate.position.y = below
+	_update_leader()
 
 
 ## Arrival effect: the ship scales up out of a flash.
 func warp_in() -> void:
-	_hull.scale = Vector3.ONE * 0.05
+	_core.scale = Vector3.ONE * 0.05
 	var tw := create_tween()
-	tw.tween_property(_hull, "scale", Vector3.ONE * 1.25, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_hull, "scale", Vector3.ONE, 0.15)
+	tw.tween_property(_core, "scale", Vector3.ONE * 1.25, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_core, "scale", Vector3.ONE, 0.15)
 	var flash := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = radius * 1.4
@@ -215,25 +315,28 @@ func _path(p: float) -> Vector3:
 # --- visuals ------------------------------------------------------------
 
 func _build() -> void:
-	_base_color = family_color(chord().quality)
+	_base_color = inversion_color(inversion())
 	_hull = Node3D.new()
 	_hull.rotation_degrees.x = FACE_PITCH_DEG
 	add_child(_hull)
+	_core = Node3D.new()
+	_hull.add_child(_core)
 	_rebuild_hull()
 	if kind == "missile":
 		_add_trail()
 	if kind == "boss":
 		_build_boss_pips()
+	# The name lives inside the pin; this plate only feeds plate_text()
+	# (decluttering) and stays hidden.
 	_plate = _label(64, Color(1, 1, 1))
-	_plate.position = Vector3(0, radius * 1.15 + 0.012, 0)
 	_plate.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_plate.visible = false
 	_notes_plate = _label(30, Color(1, 0.82, 0.45))
-	_notes_plate.position = Vector3(0, -radius * 1.15 - 0.008, 0)
 	_notes_plate.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	if kind == "boss":
 		_next_plate = _label(30, Color(0.75, 0.78, 0.9))
-		_next_plate.position = Vector3(0, -radius * 1.15 - 0.008, 0)
 		_next_plate.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_place_plates()
 	_refresh_text()
 	# Drop line + lane marker: shows which station (octave) it is attacking.
 	_drop_mesh = CylinderMesh.new()
@@ -291,55 +394,74 @@ func _label(size_px: int, color: Color) -> Label3D:
 
 
 func _rebuild_hull() -> void:
-	for c in _hull.get_children():
+	for c in _core.get_children():
 		c.queue_free()
-	_orbs.clear()
-	_orb_mats.clear()
-	var ch := chord()
-	var semis := ch.semitones()
-	var pcs := ch.pitch_classes()
-	var pts := PackedVector2Array()
-	var order := []
-	for i in semis.size():
-		order.append([posmod(semis[i], 12), i])
-	order.sort_custom(func(a, b): return a[0] < b[0])
-	for o in order:
-		var a := float(o[0]) / 12.0 * TAU
-		pts.append(Vector2(sin(a), cos(a)) * radius)
-	# Filled hull (front and back faces) + bright edges.
-	var fill := _flat(Color(_base_color, 0.35))
-	_hull.add_child(_polygon_mesh(pts, fill))
-	var edge := _flat(Color(_base_color, 0.95))
-	for i in pts.size():
-		_hull.add_child(_edge(pts[i], pts[(i + 1) % pts.size()], edge))
-	# Faint 12-note ring so the shape reads as "on the clock face".
-	var ring := MeshInstance3D.new()
+	if _pin_shader == null:
+		_pin_shader = Shader.new()
+		_pin_shader.code = PIN_SHADER
+	var col := inversion_color(inversion())
+	var r := radius * PIN_HEAD
+	var tip := r * PIN_TIP
+	var m := r * 0.25                       # room for the shadow
+	var qs := Vector2(2.0 * r + 2.0 * m, r + tip + 2.0 * m)
+	var pin := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = qs
+	pin.mesh = q
+	pin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Quad centre sits halfway between the head's top and the tip.
+	var cy := (r - tip) * 0.5
+	pin.position.y = cy
+	_pin_mat = ShaderMaterial.new()
+	_pin_mat.shader = _pin_shader
+	_pin_mat.render_priority = 6
+	_pin_mat.set_shader_parameter("quad_size", qs)
+	_pin_mat.set_shader_parameter("center_y", -cy)
+	_pin_mat.set_shader_parameter("head_r", r)
+	_pin_mat.set_shader_parameter("tip_d", tip)
+	_pin_mat.set_shader_parameter("fill", col)
+	pin.material_override = _pin_mat
+	_core.add_child(pin)
+	# Chord name in the head (shrunk to fit long names).
+	_name_label = _pin_text(chord().pretty(), r * NAME_EM, r * 1.6)
+	_name_label.position.y = r * 0.04
+	_core.add_child(_name_label)
+	# Inversion number in the tip (root position: none).
+	_inv_label = _pin_text(inversion_text(inversion()), r * NUM_EM, r * 0.9)
+	_inv_label.position.y = -r * 1.08
+	_core.add_child(_inv_label)
+	_apply_held()
+	_apply_rim()
+
+
+## White text sized in metres: `em` font height, at most `max_w` wide.
+func _pin_text(text: String, em: float, max_w: float) -> Label3D:
+	var l := Label3D.new()
+	l.font = UITheme.ui_font()
+	l.font_size = 72
+	l.pixel_size = em / 72.0
+	l.text = text
+	l.outline_size = 14
+	l.outline_modulate = Color(0.0, 0.04, 0.12, 0.55)
+	l.modulate = Color(1, 1, 1)
+	l.no_depth_test = true
+	l.render_priority = 9
+	l.outline_render_priority = 8
+	l.position.z = 0.0008
+	if text != "":
+		var w := l.font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, l.font_size).x * l.pixel_size
+		if w > max_w:
+			l.pixel_size *= max_w / w
+	return l
+
+
+func _torus(inner: float, outer: float) -> TorusMesh:
 	var tm := TorusMesh.new()
-	tm.inner_radius = radius * 0.985
-	tm.outer_radius = radius * 1.015
-	tm.rings = 32
-	tm.ring_segments = 4
-	ring.mesh = tm
-	ring.rotation.x = PI / 2
-	ring.material_override = _flat(Color(_base_color, 0.25))
-	_hull.add_child(ring)
-	for o in order:
-		var s: int = o[0]
-		var a := float(s) / 12.0 * TAU
-		var orb := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = radius * 0.2
-		sm.height = radius * 0.4
-		sm.radial_segments = 12
-		sm.rings = 6
-		orb.mesh = sm
-		var m := _flat(role_color(s).darkened(0.35))
-		orb.material_override = m
-		orb.position = Vector3(sin(a), cos(a), 0) * radius
-		_hull.add_child(orb)
-		var pc := pcs[o[1]]
-		_orbs[pc] = orb
-		_orb_mats[pc] = [m, role_color(s)]
+	tm.inner_radius = inner
+	tm.outer_radius = outer
+	tm.rings = 48
+	tm.ring_segments = 6
+	return tm
 
 
 static func _flat(c: Color) -> StandardMaterial3D:
@@ -352,37 +474,14 @@ static func _flat(c: Color) -> StandardMaterial3D:
 	return m
 
 
-static func _polygon_mesh(pts: PackedVector2Array, mat: Material) -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var idx := Geometry2D.triangulate_polygon(pts)
-	for i in idx:
-		st.add_vertex(Vector3(pts[i].x, pts[i].y, 0))
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	return mi
-
-
-func _edge(a: Vector2, b: Vector2, mat: Material) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	var l := a.distance_to(b)
-	bm.size = Vector3(l, radius * 0.07, radius * 0.07)
-	mi.mesh = bm
-	mi.material_override = mat
-	var mid := (a + b) * 0.5
-	mi.position = Vector3(mid.x, mid.y, 0)
-	mi.rotation.z = (b - a).angle()
-	return mi
-
-
 func _refresh_text() -> void:
 	var ch := chord()
 	_plate.text = ch.pretty()
+	# Notes from the bass up, in the inversion asked for.
 	var names := []
-	for n in ch.tones():
-		names.append(n.pretty())
+	var ts := ch.tones()
+	for i in ts.size():
+		names.append(ts[(i + inversion()) % ts.size()].pretty())
 	_notes_plate.text = "  ".join(names)
 	_notes_plate.visible = show_notes
 	if _next_plate:
@@ -409,26 +508,23 @@ func set_urgency(p: float, most_urgent: bool) -> void:
 	# Pulsing target ring around the most urgent ship.
 	if most_urgent and _reticle == null:
 		_reticle = MeshInstance3D.new()
-		var tm := TorusMesh.new()
-		tm.inner_radius = radius * 1.55
-		tm.outer_radius = radius * 1.7
-		tm.rings = 32
-		tm.ring_segments = 4
-		_reticle.mesh = tm
+		_reticle.mesh = _torus(radius * PIN_HEAD * 1.18, radius * PIN_HEAD * 1.27)
 		_reticle.rotation.x = PI / 2
-		_reticle.material_override = _flat(Color(1, 0.85, 0.35, 0.8))
-		add_child(_reticle)
+		_reticle.material_override = _flat(Color(1, 1, 1, 0.75))
+		_hull.add_child(_reticle)
 	if _reticle:
 		_reticle.visible = most_urgent
 		if most_urgent:
 			_reticle.scale = Vector3.ONE * (1.0 + 0.12 * sin(_clock * 8.0))
+	# The rim warms up as it closes in.
 	var col := Color(1, 1, 1)
 	if p > 0.85:
 		col = Color(1.0, 0.35, 0.3)
 	elif p > 0.6:
 		col = Color(1.0, 0.72, 0.3)
-	_plate.modulate = col
-	# Far-away ships get smaller plates (less clutter at the horizon); the
+	_rim = col
+	_apply_rim()
+	# Far-away pins are a bit smaller (less clutter at the horizon); the
 	# most urgent one is the biggest.
 	var s := lerpf(0.72, 1.1, clampf(p * 1.4, 0.0, 1.0))
 	if most_urgent:
@@ -437,6 +533,15 @@ func set_urgency(p: float, most_urgent: bool) -> void:
 		s *= 1.15
 	plate_scale = s
 	_plate.pixel_size = PLATE_PX * s
+	var ps := clampf(s, 0.85, 1.3)
+	if absf(ps - _pin_s) > 0.01 and _hull:
+		_pin_s = ps
+		_apply_scale()
+
+
+func _apply_rim() -> void:
+	if _pin_mat:
+		_pin_mat.set_shader_parameter("rim", _rim)
 
 
 var plate_scale := 1.0
@@ -444,9 +549,7 @@ var plate_scale := 1.0
 var plate_lift := 0.0:
 	set(v):
 		plate_lift = v
-		if _plate:
-			_plate.position.y = radius * 1.15 + 0.012 + v
-		_update_leader()
+		_place_plates()
 
 var _leader: MeshInstance3D          # line from a lifted plate down to its ship
 var _leader_mesh: CylinderMesh
@@ -464,28 +567,35 @@ func _update_leader() -> void:
 		_leader.mesh = _leader_mesh
 		_leader.material_override = _flat(Color(1, 1, 1, 0.5))
 		add_child(_leader)
-	var lo := radius * 1.05
-	var hi := radius * 1.15 + 0.006 + plate_lift
-	_leader.visible = plate_lift > 0.008
+	var lo := ring_radius() * 1.05
+	var hi := ring_radius() * 1.08 + 0.006 + plate_lift
+	_leader.visible = _plate != null and _plate.visible and plate_lift > 0.008
 	_leader_mesh.height = maxf(0.001, hi - lo)
 	_leader.position.y = (lo + hi) * 0.5
 
 
 func plate_anchor() -> Vector3:
-	return global_position + Vector3(0, radius * 1.15 + 0.012, 0)
+	return global_position + Vector3(0, ring_radius() * 1.08 + 0.012, 0)
 
 
 func plate_text() -> String:
 	return _plate.text
 
 
-## Lights the orbs of chord tones currently held.
+## Brightens the pin by how many of the chord's tones are held.
 func show_held(held_pcs: Dictionary) -> void:
-	for pc in _orbs:
-		var on := held_pcs.has(pc)
-		var pair: Array = _orb_mats[pc]
-		(pair[0] as StandardMaterial3D).albedo_color = pair[1] if on else (pair[1] as Color).darkened(0.35)
-		_orbs[pc].scale = Vector3.ONE * (1.6 if on else 1.0)
+	var n := 0
+	var pcs := chord().pitch_classes()
+	for pc in pcs:
+		if held_pcs.has(pc):
+			n += 1
+	_held_frac = float(n) / maxf(1.0, pcs.size())
+	_apply_held()
+
+
+func _apply_held() -> void:
+	if _pin_mat:
+		_pin_mat.set_shader_parameter("lift", _held_frac)
 
 
 ## Boss: moves to the next chord. Returns true if that was the last one.
@@ -493,7 +603,8 @@ func next_segment() -> bool:
 	segment += 1
 	if segment >= chords.size():
 		return true
-	_base_color = family_color(chord().quality)
+	_base_color = inversion_color(inversion())
+	_held_frac = 0.0
 	_rebuild_hull()
 	_refresh_text()
 	_update_boss_pips()
@@ -510,8 +621,8 @@ func _build_boss_pips() -> void:
 		pip.mesh = sm
 		pip.material_override = _flat(Color(1, 0.85, 0.4))
 		var a := TAU * i / chords.size()
-		pip.position = Vector3(sin(a), cos(a), 0) * radius * 1.45
-		add_child(pip)
+		pip.position = Vector3(sin(a), cos(a), 0) * radius * PIN_HEAD * 1.22
+		_hull.add_child(pip)
 		_boss_pips.append(pip)
 	_update_boss_pips()
 
@@ -547,8 +658,7 @@ func _add_trail() -> void:
 	add_child(p)
 
 
+## Colours for beams and explosions: the ring's.
 func orb_colors() -> Array:
-	var out := []
-	for pc in _orb_mats:
-		out.append(_orb_mats[pc][1])
-	return out
+	var c := inversion_color(inversion())
+	return [c, c.lightened(0.45), Color(1, 1, 1)]

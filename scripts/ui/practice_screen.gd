@@ -35,6 +35,12 @@ const MODES := ["play", "name", "song", "defense"]
 ## Font size of the top-bar dropdown lists (the theme default is 18).
 const MENU_FONT_SIZE := 19
 
+## Octave on/off row under the Exercise dropdown (built for the keyboard's
+## range; Settings "disabled_octaves").
+var _octave_box: VBoxContainer
+## XR shows the "Name it" answers as floating 3D buttons (XRChoiceButtons),
+## so the flat ones on the panel are hidden.
+var external_choices := false
 var _feedback_tw: Tween
 
 
@@ -101,6 +107,8 @@ func _wire_controls() -> void:
 	%SayButton.toggled.connect(func(on): if on and session.prompt: Voice.say_prompt(session.prompt))
 	%SayButton.disabled = not Voice.available()
 	%SkipButton.pressed.connect(func(): session.skip())
+	%ResetChoices.pressed.connect(func(): get_tree().call_group("xr_choice_buttons", "reset_position"))
+	_build_octave_toggles()
 	# Toggle buttons in the left strip bind to a Settings key (metadata
 	# "setting"), like the Settings panel; they stay in sync with it.
 	for b in %PromptButtons.find_children("*", "BaseButton", true, false):
@@ -137,20 +145,27 @@ func _apply_display_settings() -> void:
 	%ExerciseHeading.visible = not song_mode and not defense_mode
 	%SkipButton.visible = not song_mode and not defense_mode
 	%ChordsButton.visible = not song_mode
+	if _octave_box:
+		_octave_box.visible = not song_mode
 	_pool_label.visible = not song_mode
 	_score_label.visible = not song_mode and not defense_mode
 	# Chord Defense: the game replaces the notation; names are always shown.
 	_defense.visible = defense_mode
 	%DefenseBar.visible = defense_mode
 	%NameToggle.visible = not defense_mode
+	# The keyboard overlay (and its handles) only exists in the headset.
+	%HandlesToggle.visible = external_choices or XRServer.primary_interface != null
+	# Floating answers (XR "Name it") can be moved; this puts them back.
+	%ResetChoices.visible = external_choices and name_mode
 	%TextCol.visible = not defense_mode
 	_defense.game.set_show_notes(bool(Settings.get_value("show_notes")))
 	_defense.game.set_show_hints(bool(Settings.get_value("show_keyboard_hint")))
 	%DefensePool.set_pressed_no_signal(bool(Settings.get_value("defense_use_pool")))
+	%DefenseInversions.set_pressed_no_signal(bool(Settings.get_value("defense_inversions")))
 	if not _defense.game.is_running():
 		_defense.game.configure(int(Settings.get_value("range_low")), int(Settings.get_value("range_high")))
 	var select_mode: bool = mode == "play" and Settings.get_value("input_mode") == "select"
-	_choices_box.visible = name_mode
+	_choices_box.visible = name_mode and not external_choices
 	_select_box.visible = select_mode
 	_song_bar.visible = song_mode
 	_beats.visible = song_mode
@@ -168,8 +183,10 @@ func _on_setting_changed(key: String) -> void:
 	_apply_display_settings()
 	if key == "midi_channel":
 		_on_devices(Midi.devices)
+	if key in ["range_low", "range_high"]:
+		_build_octave_toggles()
 	if key in ["range_low", "range_high", "strict_inversion", "random_inversions", "octave_mode",
-			"target_octave", "input_mode", "name_choices"]:
+			"target_octave", "input_mode", "name_choices", "disabled_octaves"]:
 		session.start()
 
 
@@ -653,6 +670,7 @@ func _wire_defense() -> void:
 			_show_feedback(" ", UITheme.TEXT)
 			_defense.start())
 	%DefensePool.toggled.connect(func(on): Settings.set_value("defense_use_pool", on))
+	%DefenseInversions.toggled.connect(func(on): Settings.set_value("defense_inversions", on))
 
 
 func _stop_defense() -> void:
@@ -660,3 +678,64 @@ func _stop_defense() -> void:
 		_defense.stop()
 	_set_paused(false)
 	_keyboard.set_hints([])
+
+
+# --- octave toggles -----------------------------------------------------
+
+## One round toggle per octave the keyboard can play a chord in, numbered
+## above, side by side. All on by default; at least one stays on. Chords
+## are only suggested with their lowest note in an enabled octave.
+func _build_octave_toggles() -> void:
+	if _octave_box == null:
+		_octave_box = VBoxContainer.new()
+		_octave_box.add_theme_constant_override("separation", 2)
+		var nav := %ExerciseButton.get_parent()
+		nav.add_child(_octave_box)
+		nav.move_child(_octave_box, %ExerciseButton.get_index() + 1)
+	for c in _octave_box.get_children():
+		c.queue_free()
+	var heading := Label.new()
+	heading.text = "Octaves"
+	heading.add_theme_font_size_override("font_size", 17)
+	heading.add_theme_color_override("font_color", UITheme.MUTED)
+	_octave_box.add_child(heading)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	_octave_box.add_child(row)
+	var octs := ChordPrompt.keyboard_octaves(int(Settings.get_value("range_low")), int(Settings.get_value("range_high")))
+	var disabled: Array = Settings.get_value("disabled_octaves")
+	for o in octs:
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 0)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var num := Label.new()
+		num.text = str(o)
+		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		num.add_theme_font_size_override("font_size", 17)
+		col.add_child(num)
+		var t := CheckBox.new()
+		# Round "radio" look, but each one toggles on its own.
+		t.add_theme_icon_override("checked", get_theme_icon("radio_checked", "CheckBox"))
+		t.add_theme_icon_override("unchecked", get_theme_icon("radio_unchecked", "CheckBox"))
+		t.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		t.tooltip_text = "Chords starting in octave %d (C%d–B%d)" % [o, o, o]
+		t.set_pressed_no_signal(not disabled.has(o))
+		t.toggled.connect(_on_octave_toggled.bind(o, t))
+		col.add_child(t)
+		row.add_child(col)
+
+
+func _on_octave_toggled(on: bool, octave: int, t: CheckBox) -> void:
+	var disabled: Array = (Settings.get_value("disabled_octaves") as Array).duplicate()
+	var octs := ChordPrompt.keyboard_octaves(int(Settings.get_value("range_low")), int(Settings.get_value("range_high")))
+	if on:
+		disabled.erase(octave)
+	else:
+		var left := octs.filter(func(o): return o != octave and not disabled.has(o))
+		if left.is_empty():
+			t.set_pressed_no_signal(true)   # keep at least one octave on
+			_show_feedback("At least one octave has to stay on.", UITheme.WARN)
+			return
+		if not disabled.has(octave):
+			disabled.append(octave)
+	Settings.set_value("disabled_octaves", disabled)

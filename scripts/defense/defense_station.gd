@@ -7,6 +7,11 @@ var octave := 4
 var shields := DefenseRules.SHIELDS
 var alive := true
 var lane_length := 1.4
+## Lane width: one octave of the (real) keyboard in AR, so the lanes line
+## up edge to edge with the octaves.
+var lane_width := 0.15
+var _lane_mesh: PlaneMesh
+var _edges: Array[MeshInstance3D] = []
 
 var _dome_mat: StandardMaterial3D
 var _base_mat: StandardMaterial3D
@@ -17,18 +22,28 @@ var _alert := 0.0
 var color := Color(0.4, 0.75, 1.0)
 
 
-func setup(p_octave: int, p_color: Color, p_lane_length: float) -> void:
+func setup(p_octave: int, p_color: Color, p_lane_length: float, p_lane_width := 0.15) -> void:
 	octave = p_octave
 	color = p_color
 	lane_length = p_lane_length
+	lane_width = p_lane_width
 	_build()
+
+
+func set_lane_width(w: float) -> void:
+	lane_width = w
+	if _lane_mesh:
+		_lane_mesh.size = Vector2(w, lane_length)
+	for i in _edges.size():
+		_edges[i].position.x = (-1.0 if i == 0 else 1.0) * w * 0.5
 
 
 func _build() -> void:
 	_lane_mat = DefenseAttacker._flat(Color(color, 0.10))
 	var lane := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(0.15, lane_length)
+	pm.size = Vector2(lane_width, lane_length)
+	_lane_mesh = pm
 	lane.mesh = pm
 	lane.position = Vector3(0, 0.001, -lane_length / 2.0)
 	lane.material_override = _lane_mat
@@ -39,9 +54,10 @@ func _build() -> void:
 		var bm := BoxMesh.new()
 		bm.size = Vector3(0.002, 0.001, lane_length)
 		e.mesh = bm
-		e.position = Vector3(sx * 0.075, 0.0015, -lane_length / 2.0)
+		e.position = Vector3(sx * lane_width * 0.5, 0.0015, -lane_length / 2.0)
 		e.material_override = DefenseAttacker._flat(Color(color, 0.35))
 		add_child(e)
+		_edges.append(e)
 
 	_base_mat = DefenseAttacker._flat(color.darkened(0.55))
 	var base := MeshInstance3D.new()

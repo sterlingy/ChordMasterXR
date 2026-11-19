@@ -31,6 +31,7 @@ var _grabbing := false
 var _grab_ray_dist := -1.0          # >= 0 when grabbing along the ray
 var _grab_target: Object = null      # grabbable being dragged (null = panel)
 var _hovered: Node = null
+var _hover_btn: XRChoiceButton = null  # floating answer button under the ray
 var _id := 0
 
 
@@ -77,6 +78,7 @@ func _physics_process(_delta: float) -> void:
 		if _grabbing:
 			_end_grab()
 		_set_hover(null)
+		_set_btn_hover(null)
 		for g in grabbables:
 			g.set_hover(_id, "")
 		return
@@ -164,6 +166,16 @@ func _physics_process(_delta: float) -> void:
 			_pressed = trigger
 			return
 
+	# --- floating 3D buttons ("Name it" answers): pinch / trigger to press
+	var btn: XRChoiceButton = collider.get_meta("xr_button") if collider and collider.has_meta("xr_button") else null
+	_set_btn_hover(btn)
+	if btn:
+		_draw_beam(length, hit, point)
+		if trigger and not _pressed:
+			btn.press()
+		_pressed = trigger
+		return
+
 	# --- finger is touching/near the panel: let direct touch handle it
 	if touch and touch.near_panel:
 		_draw_beam(0.0, false, Vector3.ZERO)
@@ -202,6 +214,16 @@ func _end_grab() -> void:
 	_grab_target = null
 	_grabbing = false
 	_grab_ray_dist = -1.0
+
+
+func _set_btn_hover(b: XRChoiceButton) -> void:
+	if b == _hover_btn:
+		return
+	if _hover_btn and is_instance_valid(_hover_btn):
+		_hover_btn.set_hover(_id, false)
+	_hover_btn = b
+	if b:
+		b.set_hover(_id, true)
 
 
 func _set_hover(h: Node) -> void:

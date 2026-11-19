@@ -194,6 +194,26 @@ func test_ar_frame_puts_stations_over_their_octaves() -> void:
 	assert_gt(xform.origin.distance_to(lay.viewer), lay.mid().distance_to(lay.viewer))
 
 
+func test_ar_lanes_are_one_octave_wide_and_meet_edge_to_edge() -> void:
+	var lay := KeyboardLayout.new()
+	lay.low = 36
+	lay.high = 96
+	lay.viewer = Vector3(0, 1.5, 0.6)
+	lay.p_low = Vector3(-0.42, 0.8, 0.0)
+	lay.p_high = Vector3(0.42, 0.8, 0.0)
+	var f := DefenseGame.ar_frame(lay, 36, 96)
+	var xs: Array = f[1]
+	var w: float = f[2]
+	assert_almost_eq(w, lay.white_width() * 7.0, 0.0001)
+	for i in range(1, xs.size()):
+		assert_almost_eq(float(xs[i]) - float(xs[i - 1]), w, 0.0005, "neighbouring lanes touch")
+	# Each lane's left edge is the octave's C left edge.
+	var xform: Transform3D = f[0]
+	var c_left: Vector3 = lay.keys()[0]["center"] - lay.axes()[0] * lay.white_width() * 0.5
+	var lane_left := float(xs[0]) - w * 0.5
+	assert_almost_eq((c_left - xform.origin).dot(lay.axes()[0]), lane_left, 0.0005)
+
+
 func test_ar_frame_leaves_space_between_keys_and_playfield() -> void:
 	var lay := KeyboardLayout.new()
 	lay.low = 36
@@ -232,3 +252,118 @@ func test_new_sector_introduces_new_qualities() -> void:
 	assert_eq(DefenseWaves.new_qualities(5), ["dim", "aug"])
 	assert_eq(DefenseWaves.new_qualities(6), [], "only on a sector's first wave")
 	assert_true(DefenseWaves.new_qualities(9).has("m7"))
+
+
+# --- inversions -----------------------------------------------------------
+
+func test_held_inversion_reads_the_bass() -> void:
+	var c := _c("C")
+	assert_eq(DefenseRules.held_inversion([60, 64, 67], c), 0, "C in the bass: root position")
+	assert_eq(DefenseRules.held_inversion([64, 67, 72], c), 1, "E in the bass: 1st inversion")
+	assert_eq(DefenseRules.held_inversion([55, 60, 64], c), 2, "G in the bass: 2nd inversion")
+	assert_eq(DefenseRules.held_inversion([58, 64, 67, 72], _c("C7")), 3, "Bb in the bass: 3rd inversion")
+	assert_eq(DefenseRules.held_inversion([62, 64, 67], c), -1, "not a chord tone")
+
+
+func test_wrong_inversion_scores_half() -> void:
+	var c := _c("Cm")
+	var full := DefenseRules.kill_points(c, 0.4, 5)
+	var half := DefenseRules.kill_points(c, 0.4, 5, false)
+	assert_eq(half, roundi(full * DefenseRules.WRONG_INVERSION_FACTOR))
+	assert_lt(half, full)
+
+
+func test_voicing_in_octave_honours_the_asked_inversion() -> void:
+	for inv in 3:
+		var v := DefenseRules.voicing_in_octave(_c("F"), 4, 96, inv, true)
+		assert_false(v.is_empty(), "F inversion %d fits in octave 4" % inv)
+		assert_eq(DefenseRules.octave_of(v[0]), 4)
+		assert_eq(DefenseRules.held_inversion(v, _c("F")), inv)
+
+
+func test_picked_inversion_is_playable_in_the_station_octave() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var seen := {}
+	for k in 60:
+		var c := _c(["C", "Am", "G7", "Dm7", "B"][k % 5])
+		var inv := DefenseRules.pick_inversion(c, 4, 84, rng)
+		seen[inv] = true
+		var v := DefenseRules.voicing_in_octave(c, 4, 84, inv, true)
+		assert_false(v.is_empty(), "%s inversion %d playable" % [c.pretty(), inv])
+	assert_true(seen.size() >= 3, "mixes inversions")
+
+
+func test_attacker_ring_shows_inversion_number_but_not_root() -> void:
+	assert_eq(DefenseAttacker.inversion_text(0), "")
+	assert_eq(DefenseAttacker.inversion_text(1), "1")
+	assert_eq(DefenseAttacker.inversion_text(3), "3")
+	var cols := {}
+	for i in 4:
+		cols[DefenseAttacker.inversion_color(i).to_html()] = true
+	assert_eq(cols.size(), 4, "each inversion has its own colour")
+
+
+# --- keys hint ------------------------------------------------------------
+
+func test_keys_hint_sticks_to_one_attacker_until_destroyed() -> void:
+	var g := DefenseGame.new()
+	g.desktop_view = false
+	add_child_autofree(g)
+	g.configure(36, 96)
+	g.set_show_hints(true)
+	var shown := []
+	g.hint_changed.connect(func(v): shown.append(v))
+	g._add_attacker("drifter", [_c("C")], 1, 14.0)
+	g._add_attacker("drifter", [_c("G")], 2, 14.0)
+	var a: DefenseAttacker = g.attackers[0]
+	var b: DefenseAttacker = g.attackers[1]
+	a.t = 0.5
+	b.t = 0.2
+	g._update_threats()
+	assert_eq(g._hint_target, a, "starts on the closest attacker")
+	assert_false(shown.is_empty())
+	# b overtakes a: the hint stays on a.
+	b.t = 0.8
+	var n := shown.size()
+	g._update_threats()
+	assert_eq(g._hint_target, a, "doesn't jump to a closer attacker")
+	assert_eq(shown.size(), n, "keyboard hint unchanged")
+	# a destroyed: the hint moves to b.
+	g._kill(a)
+	g._update_threats()
+	assert_eq(g._hint_target, b)
+	assert_eq(DefenseRules.pc_set(shown[-1]), DefenseRules.pc_set([67, 71, 74]), "now shows G")
+
+
+func test_inversions_off_means_root_position_and_full_points() -> void:
+	var g := DefenseGame.new()
+	g.desktop_view = false
+	add_child_autofree(g)
+	g.configure(36, 96)
+	g.use_inversions = false
+	for k in 6:
+		g._add_attacker("drifter", [_c(["C", "Am", "G7"][k % 3])], 1 + k % 3, 14.0)
+	for a in g.attackers:
+		assert_eq(a.inversion(), 0, "root position only")
+	var a: DefenseAttacker = g.attackers[0]
+	a.t = 0.3
+	var expected := DefenseRules.kill_points(a.chord(), a.t, 0, true)
+	# C chord played with E in the bass: still full points.
+	g._kill(a, [64, 67, 72])
+	assert_eq(g.score, expected)
+	assert_eq(g.inv_right + g.inv_wrong, 0, "inversions not counted")
+
+
+func test_defense_attacks_only_enabled_octaves() -> void:
+	var keep: Array = Settings.get_value("disabled_octaves")
+	Settings.set_value("disabled_octaves", [2, 4])
+	var g := DefenseGame.new()
+	g.desktop_view = false
+	add_child_autofree(g)
+	g.configure(36, 96)
+	var alive := g._alive_stations()
+	for i in alive:
+		assert_false(g.octaves[i] in [2, 4], "octave %d is off" % g.octaves[i])
+	assert_eq(alive.size(), g.octaves.size() - 2)
+	Settings.set_value("disabled_octaves", keep)

@@ -19,6 +19,7 @@ var _card_text: RichTextLabel
 var _help: Label
 var _ar_note: Label
 var _card_base := ""
+var _key: HBoxContainer
 const SENDING := "[color=#9aa3c0]Sending to the global leaderboard…[/color]"
 
 
@@ -47,6 +48,8 @@ func _ready() -> void:
 	_combo = _hud_label(hud, 30, Color(1, 0.8, 0.3), Control.PRESET_TOP_RIGHT, HORIZONTAL_ALIGNMENT_RIGHT)
 	_stations = _hud_label(hud, 18, Color(0.6, 0.9, 1.0), Control.PRESET_TOP_RIGHT, HORIZONTAL_ALIGNMENT_RIGHT)
 	_stations.position.y += 40
+	_key = inversion_key()
+	hud.add_child(_key)
 
 	_banner_box = VBoxContainer.new()
 	# Banners sit in the upper part of the view, above the action (and above
@@ -67,7 +70,10 @@ func _ready() -> void:
 	_help.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_help.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_help.offset_top = 64
-	_help.text = "CHORD DEFENSE — press Start below\nPlay each chord with its lowest note in the octave it attacks. Each chord type has its own ship shape:"
+	_refresh_inversion_text()
+	Settings.changed.connect(func(key: String):
+		if key == "defense_inversions":
+			_refresh_inversion_text())
 	_help.add_theme_font_size_override("font_size", 18)
 	hud.add_child(_help)
 
@@ -133,6 +139,44 @@ func _plain_label(size_px: int, color: Color) -> Label:
 	return l
 
 
+func _refresh_inversion_text() -> void:
+	var on := bool(Settings.get_value("defense_inversions"))
+	_key.visible = on
+	if on:
+		_help.text = "CHORD DEFENSE — press Start below\nPlay each chord with its lowest note in the octave it attacks. The pin's colour and number show the inversion: empty = root position, 1 / 2 / 3 = that inversion. Another inversion still counts, for half the points."
+	else:
+		_help.text = "CHORD DEFENSE — press Start below\nPlay each chord with its lowest note in the octave it attacks. Any inversion counts."
+
+
+## Colour key for the attackers' pins: one coloured dot per inversion.
+static func inversion_key(font_px := 17) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	row.offset_left = 14
+	row.offset_top = 70
+	row.add_theme_constant_override("separation", 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var names := ["root", "1st", "2nd", "3rd"]
+	var title := Label.new()
+	title.text = "Inversion:"
+	_style_key_label(title, font_px, Color(0.85, 0.88, 1.0))
+	row.add_child(title)
+	for i in names.size():
+		var l := Label.new()
+		l.text = "● " + names[i]
+		_style_key_label(l, font_px, DefenseAttacker.inversion_color(i))
+		row.add_child(l)
+	return row
+
+
+static func _style_key_label(l: Label, px: int, c: Color) -> void:
+	l.add_theme_font_size_override("font_size", px)
+	l.add_theme_color_override("font_color", c)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0.05, 0.9))
+	l.add_theme_constant_override("outline_size", 6)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
 ## The SubViewport the game lives in on desktop (XR moves it out to the room).
 func viewport() -> SubViewport:
 	return _vp
@@ -190,6 +234,9 @@ func _on_game_over(s: Dictionary) -> void:
 	lines.append("[/center]")
 	lines.append("Chords destroyed [b]%d[/b]   ·   accuracy [b]%d%%[/b]   ·   best combo [b]%d[/b]" % [
 		int(s["kills"]), roundi(100.0 * float(s["accuracy"])), int(s["best_combo"])])
+	if int(s["kills"]) > 0 and s.get("inversions", true):
+		lines.append("Inversions: [color=#7dff9b][b]%d[/b] correct[/color]   ·   [color=#ffb36b][b]%d[/b] wrong[/color] (half points)" % [
+			int(s.get("inv_right", 0)), int(s.get("inv_wrong", 0))])
 	if int(s["kills"]) > 0:
 		lines.append("Average time to destroy [b]%.1f s[/b]   ·   fastest [b]%.1f s[/b]" % [float(s["avg_ms"]) / 1000.0, float(s["fastest_ms"]) / 1000.0])
 	var nem: Array = s["nemesis"]

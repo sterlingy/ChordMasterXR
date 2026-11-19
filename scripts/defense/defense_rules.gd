@@ -3,11 +3,16 @@ extends RefCounted
 ## Pure rules for Chord Defense (no nodes), so they can be unit-tested.
 ##
 ## The one rule: play the attacker's chord with its lowest note in the
-## octave of the station it is attacking. Station octave n covers MIDI
+## octave of the station it is attacking. Each attacker also asks for an
+## inversion (shown on its ring); playing another inversion still destroys
+## it, for half the points. Station octave n covers MIDI
 ## 12·(n+1) … 12·(n+1)+11 (C4 = 60, so octave 4 is middle C up to B4).
 
 const MAX_STATIONS := 8
 const SHIELDS := 3
+
+## Points factor for destroying a chord in the wrong inversion.
+const WRONG_INVERSION_FACTOR := 0.5
 
 ## Combo: +1 multiplier every COMBO_STEP kills in a row, capped.
 const COMBO_STEP := 4
@@ -40,20 +45,48 @@ static func station_octaves(low: int, high: int) -> Array[int]:
 
 ## A close voicing of `chord` whose lowest note is in `octave` and whose top
 ## fits under `high`, or [] if the chord can't be played there.
-## Prefers root position, then the lowest-sounding inversion.
-static func voicing_in_octave(chord: Theory.Chord, octave: int, high: int) -> Array[int]:
+## Prefers inversion `prefer` (root position by default), then the
+## lowest-sounding other inversion. `strict`: only `prefer` will do.
+static func voicing_in_octave(chord: Theory.Chord, octave: int, high: int, prefer := 0, strict := false) -> Array[int]:
 	var lo := octave_low(octave)
 	var best: Array[int] = []
-	for inv in chord.max_inversion() + 1:
+	var invs: Array = [prefer] if strict else [prefer] + range(chord.max_inversion() + 1).filter(func(i): return i != prefer)
+	for inv in invs:
 		for root_oct in range(octave - 1, octave + 2):
 			var v := chord.voicing(ChordPrompt.midi_for(chord.root, root_oct), inv)
 			if v[0] < lo or v[0] > lo + 11 or v[-1] > high:
 				continue
 			if best.is_empty():
 				best = v
-			if inv == 0:
+			if inv == prefer:
 				return v
 	return best
+
+
+## Inversions of `chord` that can be played with the lowest note in
+## `octave` (0 = root position).
+static func playable_inversions(chord: Theory.Chord, octave: int, high: int) -> Array[int]:
+	var out: Array[int] = []
+	for inv in chord.max_inversion() + 1:
+		if not voicing_in_octave(chord, octave, high, inv, true).is_empty():
+			out.append(inv)
+	return out
+
+
+## A random playable inversion for an attacker (root position if nothing
+## else fits).
+static func pick_inversion(chord: Theory.Chord, octave: int, high: int, rng: RandomNumberGenerator) -> int:
+	var opts := playable_inversions(chord, octave, high)
+	return opts[rng.randi() % opts.size()] if not opts.is_empty() else 0
+
+
+## Which inversion the held notes are in: the index of the lowest note's
+## pitch class among the chord's tones (0 = root position), -1 if the
+## lowest note isn't a chord tone.
+static func held_inversion(held: Array, chord: Theory.Chord) -> int:
+	if held.is_empty():
+		return -1
+	return chord.pitch_classes().find(posmod(int(held.min()), 12))
 
 
 static func pc_set(notes: Array) -> Dictionary:
@@ -128,10 +161,12 @@ static func combo_multiplier(streak: int) -> int:
 
 ## Points for a kill: base by chord size, bonus for killing it far from the
 ## station (progress 0 = just appeared, 1 = hitting), times the combo.
-static func kill_points(chord: Theory.Chord, progress: float, streak: int) -> int:
+## Wrong inversion: WRONG_INVERSION_FACTOR of that.
+static func kill_points(chord: Theory.Chord, progress: float, streak: int, right_inversion := true) -> int:
 	var base := 100 + 50 * maxi(0, chord.size() - 3)
 	var distance_bonus := roundi(base * (1.0 - clampf(progress, 0.0, 1.0)))
-	return (base + distance_bonus) * combo_multiplier(streak)
+	var pts := (base + distance_bonus) * combo_multiplier(streak)
+	return pts if right_inversion else roundi(pts * WRONG_INVERSION_FACTOR)
 
 
 static func wave_bonus(wave: int, full_stations: int) -> int:

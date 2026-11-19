@@ -11,8 +11,14 @@ drops into AR (the stations sit on your real keyboard) without changes.
 
 Each station guards one octave of the keyboard (C to B), and the stations
 sit left-to-right like the keys, so the station above a group of keys *is*
-that octave. Any inversion and any spread counts, as long as every note is
-a chord tone and the lowest note is in that station's octave. Holding a
+that octave. Any spread counts, as long as every note is a chord tone and
+the lowest note is in that station's octave.
+
+Each attacker also asks for an **inversion**, shown on its ring (see
+below). Playing it in that inversion (the right chord tone in the bass)
+scores full points; any other inversion still destroys it, for **half the
+points** and a dull "shattered ring" instead of the explosion. The
+game-over card counts correct and wrong inversions. Holding a
 chord doesn't keep firing: each shot needs a fresh key press.
 
 ## Input
@@ -29,30 +35,36 @@ only buttons. Everything else is decided by the game (waves, difficulty).
 * **Notes** toggle: the plate also lists the notes (C–E–G).
 * **Keys** toggle: the most urgent attacker's chord is highlighted on the
   on-screen keyboard (and on the real keyboard in AR), placed in the right
-  octave.
+  octave and inversion.
 * A **target line** runs from each attacker down to the station it is
   heading for, and the station glows while under attack.
 * The most urgent attacker's plate is larger and turns orange, then red,
   as it closes in.
-* Partial progress: as you hold correct chord tones, the matching note
-  orbs on the attacker light up — so you see which note you're missing.
+* Partial progress: as you hold correct chord tones, the attacker's ring
+  brightens.
 
-## How chords look ("harmonic hulls")
+## How chords look (inversion pins)
 
-Inspired by *chord pizzas* (Ethan Hein, NYU MusEDLab) and interval-shape
-diagrams: put the 12 pitch classes on a circle, root at the top, and join
-the chord tones. Every chord **quality** gets its own silhouette —
+Each attacker is a glossy map pin (an inverted teardrop): the chord name
+sits in the round head and the inversion number in the narrow tip. The
+pin's **colour is the inversion** to play:
 
-* major and minor triads are mirror images,
-* the augmented triad is an equilateral triangle,
-* the diminished seventh is a square,
-* sevenths add a fourth corner, ninths a fifth.
+| Pin | Inversion | Bass note |
+|---|---|---|
+| sky blue, empty tip | root position | root |
+| gold, **1** | 1st inversion | 3rd |
+| pink, **2** | 2nd inversion | 5th |
+| green, **3** | 3rd inversion (7th chords) | 7th |
 
-So an attacker's hull *is* its chord's shape, extruded into a ship. With
-practice you start recognising "that's a minor 7" from the silhouette
-before you read the name. Each corner carries a glowing **note orb**,
-coloured by its job in the chord: root white, major 3rd/6th green,
-minor 3rd blue, 5th violet, altered 5th orange, 7th gold, 9th cyan.
+The colour key is always on screen: in the game HUD (also on the XR
+panel) and, in AR, lying on the table to the right of the highest
+station. The pin brightens as you hold more of its chord's tones, and its
+white rim turns orange, then red, as it closes in. With **Notes** on, the
+chord tones are listed under the tip from the bass up, in the inversion
+asked for. Inversions are picked at random from those that fit in the
+station's octave on your keyboard. Pins grow with distance so names stay
+readable at the far end of the lanes. The start screen shows C in root
+position, 1st and 2nd inversion and G7 in 3rd.
 
 ## Attackers (arcade lineage → our twist)
 

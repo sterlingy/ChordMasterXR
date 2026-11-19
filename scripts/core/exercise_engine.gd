@@ -44,6 +44,8 @@ var strict_inversion := false
 var random_inversions := false   # in strict mode, ask for random inversions
 var octave_mode := false
 var target_octave := 4           # -1 = random octave within range
+## Octaves chords may not start in (their lowest note); [] = all allowed.
+var disabled_octaves: Array = []
 
 var _queue: Array = []           # pending ChordPrompt objects for sequenced types
 var _last_key := ""
@@ -186,7 +188,7 @@ func _push_251(key_name: String, voice_lead: bool) -> void:
 ## position near the middle of the keyboard.
 func _closest_inversion(c: Theory.Chord, prev: Array[int]) -> Dictionary:
 	if prev.is_empty():
-		var rm := ChordPrompt.place_root(c, 0, range_low, range_high)
+		var rm := ChordPrompt.place_root(c, 0, range_low, range_high, 62, disabled_octaves)
 		return {} if rm < 0 else {"inversion": 0, "root_midi": rm}
 	var best := {}
 	var best_cost := INF
@@ -194,7 +196,7 @@ func _closest_inversion(c: Theory.Chord, prev: Array[int]) -> Dictionary:
 		for octave in range(0, 9):
 			var rm := ChordPrompt.midi_for(c.root, octave)
 			var v := c.voicing(rm, inv)
-			if v[0] < range_low or v[-1] > range_high:
+			if v[0] < range_low or v[-1] > range_high or disabled_octaves.has(ChordPrompt.bass_octave(v)):
 				continue
 			var cost := 0.0
 			for i in mini(v.size(), prev.size()):
@@ -210,8 +212,8 @@ func _closest_inversion(c: Theory.Chord, prev: Array[int]) -> Dictionary:
 
 func _fits_anywhere(c: Theory.Chord) -> bool:
 	if octave_mode and target_octave >= 0:
-		return ChordPrompt.fits_in_octave(c, 0, target_octave, range_low, range_high)
-	return ChordPrompt.place_root(c, 0, range_low, range_high) >= 0
+		return ChordPrompt.fits_in_octave(c, 0, target_octave, range_low, range_high, disabled_octaves)
+	return ChordPrompt.place_root(c, 0, range_low, range_high, 62, disabled_octaves) >= 0
 
 
 func _make_prompt(c: Theory.Chord, inv: int, ctx: String, key_tonic: String, key_scale: String,
@@ -231,16 +233,16 @@ func _make_prompt(c: Theory.Chord, inv: int, ctx: String, key_tonic: String, key
 		if oct < 0:
 			var options := []
 			for o in range(0, 9):
-				if ChordPrompt.fits_in_octave(c, inv, o, range_low, range_high):
+				if ChordPrompt.fits_in_octave(c, inv, o, range_low, range_high, disabled_octaves):
 					options.append(o)
 			if options.is_empty():
 				return null
 			oct = options[rng.randi() % options.size()]
-		if not ChordPrompt.fits_in_octave(c, inv, oct, range_low, range_high):
+		if not ChordPrompt.fits_in_octave(c, inv, oct, range_low, range_high, disabled_octaves):
 			return null
 		p.root_midi = ChordPrompt.midi_for(c.root, oct)
 	else:
-		var rm := ChordPrompt.place_root(c, inv, range_low, range_high)
+		var rm := ChordPrompt.place_root(c, inv, range_low, range_high, 62, disabled_octaves)
 		if rm < 0:
 			return null
 		p.root_midi = rm

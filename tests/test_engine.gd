@@ -145,3 +145,27 @@ func test_choices_exclude_same_sounding() -> void:
 	for i in 30:
 		for c in e.choices_for(answer, 5):
 			assert_false(c.key() == "A:m7", "Am7 sounds identical to C6")
+
+
+# --- octave toggles -------------------------------------------------------
+
+func test_keyboard_octaves_for_common_keyboards() -> void:
+	assert_eq(ChordPrompt.keyboard_octaves(36, 96), [2, 3, 4, 5, 6], "61 keys C2-C7")
+	assert_eq(ChordPrompt.keyboard_octaves(21, 108), [0, 1, 2, 3, 4, 5, 6, 7], "88 keys A0-C8")
+	assert_eq(ChordPrompt.keyboard_octaves(48, 72), [3, 4], "25 keys C3-C5 (C5 alone can't hold a chord)")
+
+
+func test_prompts_only_start_in_enabled_octaves() -> void:
+	for type in ["random", "smart"]:
+		var e := ExerciseEngine.new()
+		e.rng.seed = 99
+		e.range_low = 36
+		e.range_high = 96
+		e.disabled_octaves = [2, 3, 5]
+		e.random_inversions = true
+		e.configure(type, ChordPool.from_preset("Major & minor"), PracticeStats.new())
+		for i in 80:
+			var pr := e.next_prompt()
+			assert_not_null(pr)
+			var o := ChordPrompt.bass_octave(pr.voicing())
+			assert_true(o == 4 or o == 6, "%s %s starts in octave %d" % [type, pr.voicing(), o])
