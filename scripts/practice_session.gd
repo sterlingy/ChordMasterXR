@@ -9,7 +9,8 @@ extends Node
 ##           with input_mode "select" from the on-screen keyboard
 ##           (select notes, then submit()).
 ##   name  – the chord is shown on the staff; pick its name from cards
-##           (answer_choice()).
+##           (answer_choice()), or play it on the keyboard: playing one of
+##           the choices (any inversion/octave) picks that card.
 
 signal prompt_changed(prompt: ChordPrompt, choices: Array)
 signal feedback(result: ChordMatcher.Result, wrong_notes: Array)
@@ -17,6 +18,8 @@ signal choice_feedback(chord: Theory.Chord, correct: bool)
 signal score_changed(info: Dictionary)
 signal no_chords(reason: String)
 signal paused_changed(paused: bool)
+## Name it: a chord was played that isn't any of the choices (no penalty).
+signal played_unknown_choice()
 
 enum State { IDLE, WAITING, NEED_RELEASE, RETRY_AFTER_RELEASE, ADVANCING }
 
@@ -25,6 +28,7 @@ var stats := PracticeStats.new()
 var prompt: ChordPrompt
 var choices: Array = []
 var state := State.IDLE
+var _name_need_release := false     # name it: a played chord was judged; let go first
 
 var streak := 0
 var best_streak := 0
@@ -198,6 +202,9 @@ func _on_note_off(pitch: int) -> void:
 
 
 func _on_held_changed(held: Array) -> void:
+	if practice_mode() == "name":
+		_judge_played_choice(held)
+		return
 	if not uses_live_midi() or prompt == null:
 		return
 	if paused:
@@ -236,6 +243,38 @@ func submit(selected: Array) -> ChordMatcher.Result:
 
 
 # --- name mode --------------------------------------------------------
+
+## Name it by playing: once the held notes are exactly one choice's notes
+## (any inversion, octave or doubling), that choice is answered. A full
+## chord that matches none of them gets a hint, no penalty. Keys must be
+## released before the next chord is judged.
+func _judge_played_choice(held: Array) -> void:
+	if held.is_empty():
+		_name_need_release = false
+		return
+	if _name_need_release or paused or prompt == null or state != State.WAITING:
+		return
+	var hs := {}
+	for m in held:
+		hs[posmod(int(m), 12)] = true
+	var building := false
+	for c in choices:
+		var pcs: Array = c.pitch_classes()
+		var inside := true
+		for pc in hs:
+			if not pcs.has(pc):
+				inside = false
+				break
+		if not inside:
+			continue
+		if hs.size() == pcs.size():
+			_name_need_release = true
+			answer_choice(c)
+			return
+		building = true
+	if not building and hs.size() >= 3:
+		_name_need_release = true
+		played_unknown_choice.emit()
 
 func answer_choice(c: Theory.Chord) -> bool:
 	if paused or prompt == null or state != State.WAITING:

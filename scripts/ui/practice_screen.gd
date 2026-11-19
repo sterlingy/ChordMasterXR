@@ -52,6 +52,8 @@ func _ready() -> void:
 	session.prompt_changed.connect(_on_prompt)
 	session.feedback.connect(_on_feedback)
 	session.choice_feedback.connect(_on_choice_feedback)
+	session.played_unknown_choice.connect(func():
+		_show_feedback("That chord isn't one of the choices — try again", UITheme.WARN))
 	session.score_changed.connect(_on_score)
 	session.no_chords.connect(_on_no_chords)
 	Midi.held_changed.connect(_on_held)
@@ -207,7 +209,7 @@ func _refresh_prompt_view() -> void:
 	var answered := session.state == PracticeSession.State.ADVANCING
 	# Without the staff, the chord name is the prompt, so show it big.
 	_set_big("" if _staff.visible else p.title())
-	_set_sub("Which chord is this?" if name_mode else p.subtitle(false))
+	_set_sub("Which chord is this? Pick it, or play it." if name_mode else p.subtitle(false))
 	_set_notes(_notes_text(p) if Settings.get_value("show_notes") and not name_mode else "")
 	_set_below("")
 	var voiced := p.voiced_tones()
