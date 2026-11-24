@@ -405,6 +405,129 @@ static func run(script_name: String, screen: PracticeScreen) -> void:
 				cb._on_feedback(right.chord, true)
 				print("DEV wrong ", wrong.state, " right ", right.state)
 			await tree.create_timer(0.4 if script_name == "xr_choices" else 0.2).timeout
+		"hero":
+			# Marketing image: the AR playfield on a glowing keyboard, pins in
+			# flight, the target chord lit on the keys, title on top.
+			# Render at 1920x1080: --resolution 1920x1080.
+			screen.visible = false
+			get_tree_root_msaa(tree)
+			var world := Node3D.new()
+			tree.root.add_child(world)
+			var env := WorldEnvironment.new()
+			var e := Environment.new()
+			e.background_mode = Environment.BG_COLOR
+			e.background_color = Color(0.015, 0.018, 0.045)
+			e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			e.ambient_light_color = Color(0.55, 0.55, 0.65)
+			e.glow_enabled = true
+			e.glow_intensity = 0.7
+			e.glow_bloom = 0.12
+			env.environment = e
+			world.add_child(env)
+			# Soft nebula glows far behind the lanes.
+			var tex := GradientTexture2D.new()
+			tex.fill = GradientTexture2D.FILL_RADIAL
+			tex.fill_from = Vector2(0.5, 0.5)
+			tex.fill_to = Vector2(1.0, 0.5)
+			var grad := Gradient.new()
+			grad.colors = PackedColorArray([Color(1, 1, 1, 0.6), Color(1, 1, 1, 0.0)])
+			tex.gradient = grad
+			for spot in [[Vector3(-0.9, 1.25, -2.2), Color(0.35, 0.3, 1.0), 2.6], [Vector3(0.9, 1.1, -2.4), Color(0.9, 0.3, 0.8), 2.2], [Vector3(0.1, 0.95, -2.8), Color(0.2, 0.7, 1.0), 3.0]]:
+				var q := MeshInstance3D.new()
+				var qm := QuadMesh.new()
+				qm.size = Vector2(spot[2], spot[2] * 0.7)
+				q.mesh = qm
+				var qmat := DefenseAttacker._flat(Color(spot[1], 0.35))
+				qmat.albedo_texture = tex
+				qmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+				q.material_override = qmat
+				q.position = spot[0]
+				world.add_child(q)
+			var light := DirectionalLight3D.new()
+			light.rotation_degrees = Vector3(-55, 25, 0)
+			world.add_child(light)
+			Settings.set_value("range_low", 36)
+			Settings.set_value("range_high", 96)
+			Settings.set_value("xr_kb_opacity", 1.0)
+			Settings.set_value("defense_inversions", true)
+			var ov := XRKeyboardOverlay.new()
+			ov.source = screen._keyboard
+			world.add_child(ov)
+			ov.layout.viewer = Vector3(0, 1.3, 0.55)
+			ov.layout.p_low = Vector3(-0.42, 0.80, 0.0)
+			ov.layout.p_high = Vector3(0.42, 0.80, 0.0)
+			ov._calibrated = true
+			ov._rebuild()
+			# Solid-looking keys for the render (the overlay is translucent in AR).
+			ov._mats["white"].albedo_color = Color(0.93, 0.94, 0.98, 0.97)
+			ov._mats["black"].albedo_color = Color(0.05, 0.05, 0.07, 1.0)
+			ov._last_state.clear()
+			# A dark keyboard body under the glowing keys.
+			var ax := ov.layout.axes()
+			var body := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			var key_len := ov.layout.white_width() * KeyboardLayout.WHITE_LEN
+			bm.size = Vector3(0.84 + ov.layout.white_width() * 2.0, 0.035, key_len + 0.07)
+			body.mesh = bm
+			var bmat := StandardMaterial3D.new()
+			bmat.albedo_color = Color(0.06, 0.065, 0.08)
+			bmat.metallic = 0.4
+			bmat.roughness = 0.35
+			body.material_override = bmat
+			body.position = ov.layout.mid() + ax[2] * (key_len * 0.5 + 0.015) + Vector3.DOWN * 0.035
+			world.add_child(body)
+			var g := DefenseGame.new()
+			g.desktop_view = false
+			world.add_child(g)
+			g.configure(36, 96)
+			var frame := DefenseGame.ar_frame(ov.layout, 36, 96)
+			g.enter_ar(frame[0], frame[1], frame[2])
+			g.configure(36, 96)
+			if g._ar_key:
+				g._ar_key.visible = false
+			# Pins in flight: [chord, inversion, station, depth (−z), height].
+			var pins := [["Am", 0, 0, 1.15, 0.12], ["F", 1, 1, 0.55, 0.08], ["G7", 3, 2, 0.24, 0.06],
+				["Dm", 2, 3, 0.9, 0.11], ["C", 0, 4, 0.62, 0.09]]
+			var target: DefenseAttacker = null
+			for pn in pins:
+				var a := DefenseAttacker.new()
+				g._field.add_child(a)
+				a.setup("drifter", [Theory.parse_chord(pn[0])], pn[2], g.station_x(pn[2]), 99.0, g.rng, [pn[1]])
+				a.position = Vector3(g.station_x(pn[2]), pn[4], -pn[3])
+				a.scale = Vector3.ONE * 0.68     # smaller than in play, for the poster
+				a.set_urgency(0.7 if pn[0] == "G7" else 0.25, pn[0] == "G7")
+				if pn[0] == "G7":
+					target = a
+			# The target chord (G7, 3rd inversion: F G B D) lit on the keys.
+			var v := DefenseRules.voicing_in_octave(target.chord(), g.octaves[target.station], 96, 3, true)
+			screen._keyboard.set_hints(v)
+			screen._keyboard.set_held(v.slice(0, 2))
+			var cam := Camera3D.new()
+			world.add_child(cam)
+			# Scene on the right two-thirds, title top-left.
+			cam.position = Vector3(-0.34, 1.18, 0.8)
+			cam.look_at(Vector3(-0.14, 0.9, -0.32))
+			cam.fov = 50
+			cam.current = true
+			# Title.
+			var layer := CanvasLayer.new()
+			tree.root.add_child(layer)
+			var box := VBoxContainer.new()
+			box.position = Vector2(110, 90)
+			layer.add_child(box)
+			var t1 := Label.new()
+			t1.text = "Chord Master XR"
+			t1.add_theme_font_size_override("font_size", 96)
+			t1.add_theme_color_override("font_color", Color(1, 1, 1))
+			t1.add_theme_color_override("font_outline_color", Color(0.05, 0.08, 0.2, 0.9))
+			t1.add_theme_constant_override("outline_size", 10)
+			box.add_child(t1)
+			var t2 := Label.new()
+			t2.text = "Learn chords on your real keyboard — in mixed reality"
+			t2.add_theme_font_size_override("font_size", 38)
+			t2.add_theme_color_override("font_color", Color(0.62, 0.78, 1.0))
+			box.add_child(t2)
+			await tree.create_timer(1.2).timeout
 		"defense_ar_left", "defense_ar_right":
 			# Desktop preview of Chord Defense placed on a calibrated real
 			# keyboard (as in XR), seen from the left or right of the player.
@@ -557,3 +680,9 @@ static func _click(tree: SceneTree, pos: Vector2) -> void:
 		e.global_position = pos
 		Input.parse_input_event(e)
 		await tree.process_frame
+
+
+## Smoother edges for the marketing render.
+static func get_tree_root_msaa(tree: SceneTree) -> void:
+	tree.root.msaa_3d = Viewport.MSAA_8X
+	tree.root.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
