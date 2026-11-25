@@ -19,7 +19,7 @@ const PANEL_PIXELS := Vector2i(1600, 900)
 const PANEL_DISTANCE := 0.85                    # metres in front of the eyes
 const PANEL_DROP := 0.12                        # below eye level
 
-var xr: OpenXRInterface
+var xr: XRInterface             # OpenXR (the type is missing in web builds)
 var origin: XROrigin3D
 var camera: XRCamera3D
 var pointers: Array[XRPointer] = []
@@ -31,24 +31,43 @@ var _defense_cal := []          # calibration the game was placed with
 
 
 func _ready() -> void:
-	xr = XRServer.find_interface("OpenXR") as OpenXRInterface
-	if xr == null or not xr.is_initialized():
-		push_warning("OpenXR not initialised; falling back to 2D.")
-		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
-		return
-	get_viewport().use_xr = true
-	# Android XR: hand tracking (fingertip touch, pinch) needs the
-	# HAND_TRACKING runtime permission; this asks for all dangerous
-	# permissions declared in the manifest that aren't granted yet.
-	if OS.has_feature("android"):
-		OS.request_permissions()
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	_enable_passthrough()
+	# Web: a WebXR session (WebXRStereo) drives the trackers and renders the
+	# eyes itself; no OpenXR interface.
+	var web := WebXRStereo.instance
+	var on_web := OS.has_feature("web") and web != null and is_instance_valid(web) and web.active
+	var preview := not on_web and WebXRStereo.preview_requested()
+	if on_web or preview:
+		_add_environment()
+	else:
+		xr = XRServer.find_interface("OpenXR")
+		if xr == null or not xr.is_initialized():
+			push_warning("OpenXR not initialised; falling back to 2D.")
+			get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
+			return
+		get_viewport().use_xr = true
+		# Android XR: hand tracking (fingertip touch, pinch) needs the
+		# HAND_TRACKING runtime permission; this asks for all dangerous
+		# permissions declared in the manifest that aren't granted yet.
+		if OS.has_feature("android"):
+			OS.request_permissions()
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		_enable_passthrough()
 
 	origin = XROrigin3D.new()
 	add_child(origin)
 	camera = XRCamera3D.new()
 	origin.add_child(camera)
+	if on_web:
+		web.origin = origin
+	elif preview:
+		camera.position.y = 1.5      # a standing head, looking ahead
+		# Draw through a plain camera, like the WebXR eyes do.
+		var view := Camera3D.new()
+		camera.add_child(view)
+		view.current = true
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--screenshot="):
+				_preview_shot.call_deferred(a.trim_prefix("--screenshot="))
 
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50, 30, 0)
@@ -112,7 +131,9 @@ func _ready() -> void:
 	t.timeout.connect(_update_defense_ar)
 	add_child(t)
 
-	xr.pose_recentered.connect(_place_panel)
+	if xr:
+		if xr.has_signal("pose_recentered"):
+			xr.connect("pose_recentered", _place_panel)
 	# Wait for head tracking to settle before placing the panel.
 	await get_tree().create_timer(0.6).timeout
 	_place_panel()
@@ -125,6 +146,20 @@ func _enable_passthrough() -> void:
 		get_viewport().transparent_bg = true
 	elif XRInterface.XR_ENV_BLEND_MODE_ADDITIVE in modes:
 		xr.environment_blend_mode = XRInterface.XR_ENV_BLEND_MODE_ADDITIVE
+	_add_environment()
+
+
+## Dev: `-- --xrpreview --screenshot=<png>` saves the XR scene seen flat.
+func _preview_shot(path: String) -> void:
+	await get_tree().create_timer(2.0).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(path)
+	print("SCREENSHOT ", path)
+	get_tree().quit()
+
+
+## Clear background (the room shows through) and flat ambient light.
+func _add_environment() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR

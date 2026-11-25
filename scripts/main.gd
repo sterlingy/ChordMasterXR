@@ -15,6 +15,12 @@ func _ready() -> void:
 	if want_xr and ResourceLoader.exists(XR_SCENE):
 		get_tree().change_scene_to_file.call_deferred(XR_SCENE)
 		return
+	# Web: an "Enter AR" button starts a WebXR session in headset browsers
+	# (the session then switches to the XR scene).
+	WebXRStereo.ensure(get_tree())
+	if WebXRStereo.preview_requested() and ResourceLoader.exists(XR_SCENE):
+		get_tree().change_scene_to_file.call_deferred(XR_SCENE)
+		return
 	var screen := get_node_or_null("PracticeScreen") as PracticeScreen
 	if screen:
 		_dev_args(screen)
