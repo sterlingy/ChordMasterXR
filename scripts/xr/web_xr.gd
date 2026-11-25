@@ -36,7 +36,7 @@ const AXIS_NAMES: Array[StringName] = [&"touchpad_x", &"touchpad_y", &"thumbstic
 const HUMANOID_JOINT := Basis(Vector3(-1.0, 0.0, 0.0), Vector3(0.0, 0.0, -1.0), Vector3(0.0, -1.0, 0.0))
 
 ## Shown next to the Enter AR button, so a headset shows which build it runs.
-const BUILD := "web AR 4"
+const BUILD := "web AR 6"
 
 static var instance: WebXRStereo
 
@@ -400,17 +400,19 @@ func _update_inputs(tracker: XRControllerTracker, input: Dictionary) -> void:
 			tracker.set_input(AXIS_NAMES[i], -value if i == 1 or i == 3 else value)
 		else:
 			tracker.set_input(StringName("axis_%d" % i), value)
-	# Hands have no gamepad: the page script's pinch stands in for the trigger
-	# (what XRPointer clicks with), as in OpenXR's hand interaction profile.
+	# Hands: the browser's own pinch (select/squeeze) is the trigger and grip,
+	# what XRPointer clicks with. The joint-derived pinch is not used for
+	# clicks: on the Aura a relaxed hand rests with the thumb and index tips
+	# about 25 mm apart, which reads as 0.9 "pinched" and held the trigger down.
 	var select: bool = input.get("select", false)
 	var squeeze: bool = input.get("squeeze", false)
 	if input.get("isHand", false):
 		var grasp: float = input.get("grasp", 0.0)
-		var pinch: float = input.get("pinch", 0.0)
 		tracker.set_input(&"grip", maxf(grasp, 1.0 if squeeze else 0.0))
-		tracker.set_input(&"grip_click", grasp > 0.5 or squeeze)
-		tracker.set_input(&"trigger", maxf(pinch, 1.0 if select else 0.0))
-		tracker.set_input(&"trigger_click", pinch > 0.5 or select)
+		tracker.set_input(&"grip_click", grasp > 0.9 or squeeze)
+		tracker.set_input(&"trigger", 1.0 if select else 0.0)
+		tracker.set_input(&"trigger_click", select)
+		tracker.set_input(&"pinch", input.get("pinch", 0.0))
 	elif select or squeeze:
 		# The browser's select/squeeze also covers sources with no gamepad
 		# (gaze-and-pinch, transient pointers).

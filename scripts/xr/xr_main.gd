@@ -28,6 +28,8 @@ var keyboard_overlay: XRKeyboardOverlay
 var _defense: DefenseView
 var _field_handle: XRFieldHandle
 var _defense_cal := []          # calibration the game was placed with
+var _screen: PracticeScreen
+var _choice_buttons: XRChoiceButtons
 
 
 func _ready() -> void:
@@ -67,7 +69,7 @@ func _ready() -> void:
 		view.current = true
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--screenshot="):
-				_preview_shot.call_deferred(a.trim_prefix("--screenshot="))
+				_preview_shot.call_deferred(a.trim_prefix("--screenshot="), screen_script())
 
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50, 30, 0)
@@ -80,6 +82,9 @@ func _ready() -> void:
 	panel.camera = camera
 	var screen: Control = load("res://scenes/ui/practice_screen.tscn").instantiate()
 	panel.set_content(screen)
+	_screen = screen
+	if on_web or preview:
+		_add_exit_button(screen, web if on_web else null)
 
 	# Highlights on the real keyboard (after "Calibrate real keyboard").
 	keyboard_overlay = XRKeyboardOverlay.new()
@@ -118,6 +123,7 @@ func _ready() -> void:
 	choice_buttons.panel = panel
 	choice_buttons.origin = origin
 	add_child(choice_buttons)
+	_choice_buttons = choice_buttons
 	for p in pointers:
 		p.grabbables.append(choice_buttons)    # its move knob
 
@@ -149,9 +155,36 @@ func _enable_passthrough() -> void:
 	_add_environment()
 
 
+## Web AR: the browser has no exit of its own in the view, so the panel's
+## top bar gets one.
+func _add_exit_button(screen: Control, web: WebXRStereo) -> void:
+	var bar := screen.get_node_or_null("Margin/Column/TopBar")
+	if bar == null:
+		return
+	var b := Button.new()
+	b.name = "ExitARButton"
+	b.text = "Exit AR"
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 22)
+	if web:
+		b.pressed.connect(web.exit)
+	bar.add_child(b)
+
+
+static func screen_script() -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--script="):
+			return a.trim_prefix("--script=")
+	return ""
+
+
 ## Dev: `-- --xrpreview --screenshot=<png>` saves the XR scene seen flat.
-func _preview_shot(path: String) -> void:
-	await get_tree().create_timer(2.0).timeout
+## `--script=<name>` also runs a DevScripts step first (e.g. "name").
+func _preview_shot(path: String, script_name := "") -> void:
+	await get_tree().create_timer(1.0).timeout
+	if script_name != "":
+		await DevScripts.run(script_name, _screen)
+	await get_tree().create_timer(1.5).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)
 	print("SCREENSHOT ", path)
@@ -206,6 +239,8 @@ func _place_panel() -> void:
 	fwd = fwd.normalized()
 	panel.global_position = head.origin + fwd * PANEL_DISTANCE + Vector3.DOWN * PANEL_DROP
 	panel.face_camera()
+	if _choice_buttons:
+		_choice_buttons.relayout()
 
 
 func _unhandled_input(event: InputEvent) -> void:

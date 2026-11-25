@@ -96,6 +96,16 @@ func _aim() -> void:
 	_frame = Basis(fwd.cross(Vector3.UP).normalized(), Vector3.UP, -fwd)
 
 
+## Lays the current row out again from where the head is now (the panel
+## calls this once head tracking has settled: a question shown in the first
+## frames was laid out around a head still at the floor).
+func relayout() -> void:
+	if buttons.is_empty() or not _grab.is_empty():
+		return
+	_aim()
+	_layout(saved_offset())
+
+
 ## Back to the default spot: within reach, below eye level, towards the
 ## main window (forgets where the knob left the row).
 func reset_position() -> void:
